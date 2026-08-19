@@ -18,6 +18,33 @@
 #include <cstring>
 
 #define TAG "Application"
+void setup_steering() {
+    gpio_reset_pin(STEER_LEFT_GPIO);
+    gpio_reset_pin(STEER_RIGHT_GPIO);
+    
+    gpio_set_direction(STEER_LEFT_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_direction(STEER_RIGHT_GPIO, GPIO_MODE_OUTPUT);
+
+    // Posisi awal netral (mati)
+    gpio_set_level(STEER_LEFT_GPIO, 0);
+    gpio_set_level(STEER_RIGHT_GPIO, 0);
+}
+
+void belok_kiri() {
+    gpio_set_level(STEER_LEFT_GPIO, 1);
+    gpio_set_level(STEER_RIGHT_GPIO, 0);
+}
+
+void belok_kanan() {
+    gpio_set_level(STEER_LEFT_GPIO, 0);
+    gpio_set_level(STEER_RIGHT_GPIO, 1);
+}
+
+void roda_lurus() {
+    gpio_set_level(STEER_LEFT_GPIO, 0);
+    gpio_set_level(STEER_RIGHT_GPIO, 0);
+}
+
 
 Application::Application() {
     event_group_ = xEventGroupCreate();
@@ -58,7 +85,7 @@ bool Application::SetDeviceState(DeviceState state) { return state_machine_.Tran
 void Application::Initialize() {
     auto& board = Board::GetInstance();
     SetDeviceState(kDeviceStateStarting);
-
+    setup_steering();
     // Setup the display
     auto display = board.GetDisplay();
     display->SetupUI();
