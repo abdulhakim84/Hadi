@@ -27,6 +27,7 @@
 #define STEER_RIGHT_GPIO GPIO_NUM_12
 #endif
 
+extern "C" {
 void setup_steering() {
     gpio_reset_pin(STEER_LEFT_GPIO);
     gpio_reset_pin(STEER_RIGHT_GPIO);
@@ -53,7 +54,7 @@ void roda_lurus() {
     gpio_set_level(STEER_LEFT_GPIO, 0);
     gpio_set_level(STEER_RIGHT_GPIO, 0);
 }
-
+}
 
 Application::Application() {
     event_group_ = xEventGroupCreate();
