@@ -27,6 +27,9 @@
 
 #endif
 
+// Motor Steering (Dinamo Belok)
+#define STEER_LEFT_GPIO   GPIO_NUM_11
+#define STEER_RIGHT_GPIO  GPIO_NUM_12
 
 #define BUILTIN_LED_GPIO        GPIO_NUM_48
 #define BOOT_BUTTON_GPIO        GPIO_NUM_0
