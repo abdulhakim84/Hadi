@@ -12,13 +12,15 @@
 #include "websocket_protocol.h"
 
 #include <driver/gpio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <esp_log.h>
 #include <arpa/inet.h>
 #include <cJSON.h>
 #include <cstring>
 
 #define TAG "Application"
-// Definisi pin 11 dan 12 langsung di application.cc
+
 #ifndef STEER_LEFT_GPIO
 #define STEER_LEFT_GPIO GPIO_NUM_11
 #endif
@@ -27,34 +29,81 @@
 #define STEER_RIGHT_GPIO GPIO_NUM_12
 #endif
 
-extern "C" {
-void setup_steering() {
-    gpio_reset_pin(STEER_LEFT_GPIO);
-    gpio_reset_pin(STEER_RIGHT_GPIO);
+#define STEER_TAG "RC_STEER"
+
+static TaskHandle_t steer_task_handle = NULL;
+
+struct SteerParams {
+    int left_level;
+    int right_level;
+    int duration_ms;
+};
+
+// Task latar belakang untuk menahan HIGH lalu otomatis LOW
+void steer_timer_task(void* pvParameters) {
+    SteerParams* params = (SteerParams*)pvParameters;
     
-    gpio_set_direction(STEER_LEFT_GPIO, GPIO_MODE_OUTPUT);
-    gpio_set_direction(STEER_RIGHT_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(STEER_LEFT_GPIO, params->left_level);
+    gpio_set_level(STEER_RIGHT_GPIO, params->right_level);
 
-    // Posisi awal netral (mati)
+    // Tahan posisi HIGH selama durasi (misal 2000ms / 2 detik)
+    vTaskDelay(pdMS_TO_TICKS(params->duration_ms));
+
+    // Matikan sinyal (LOW) agar pegas mengembalikan roda ke tengah & dinamo tidak panas
     gpio_set_level(STEER_LEFT_GPIO, 0);
     gpio_set_level(STEER_RIGHT_GPIO, 0);
+    ESP_LOGI(STEER_TAG, "Durasi selesai: Roda kembali lurus oleh pegas");
+
+    delete params;
+    steer_task_handle = NULL;
+    vTaskDelete(NULL);
 }
 
-void belok_kiri() {
-    gpio_set_level(STEER_LEFT_GPIO, 1);
-    gpio_set_level(STEER_RIGHT_GPIO, 0);
+void trigger_steer(int left, int right, int duration_ms) {
+    // Jika sedang ada proses belok yang berjalan, batalkan task sebelumnya
+    if (steer_task_handle != NULL) {
+        vTaskDelete(steer_task_handle);
+        steer_task_handle = NULL;
+    }
+
+    SteerParams* params = new SteerParams{left, right, duration_ms};
+    xTaskCreate(steer_timer_task, "steer_timer_task", 2048, params, 5, &steer_task_handle);
 }
 
-void belok_kanan() {
-    gpio_set_level(STEER_LEFT_GPIO, 0);
-    gpio_set_level(STEER_RIGHT_GPIO, 1);
+extern "C" {
+    void setup_steering() {
+        gpio_reset_pin(STEER_LEFT_GPIO);
+        gpio_reset_pin(STEER_RIGHT_GPIO);
+        gpio_set_direction(STEER_LEFT_GPIO, GPIO_MODE_OUTPUT);
+        gpio_set_direction(STEER_RIGHT_GPIO, GPIO_MODE_OUTPUT);
+        gpio_set_level(STEER_LEFT_GPIO, 0);
+        gpio_set_level(STEER_RIGHT_GPIO, 0);
+    }
+
+    // Belok kiri & tahan selama durasi ms (default 2000 ms = 2 detik)
+    void belok_kiri_durasi(int duration_ms) {
+        ESP_LOGI(STEER_TAG, "Belok Kiri dipemicu selama %d ms", duration_ms);
+        trigger_steer(1, 0, duration_ms);
+    }
+
+    // Belok kanan & tahan selama durasi ms
+    void belok_kanan_durasi(int duration_ms) {
+        ESP_LOGI(STEER_TAG, "Belok Kanan dipemicu selama %d ms", duration_ms);
+        trigger_steer(0, 1, duration_ms);
+    }
+
+    void roda_lurus() {
+        if (steer_task_handle != NULL) {
+            vTaskDelete(steer_task_handle);
+            steer_task_handle = NULL;
+        }
+        gpio_set_level(STEER_LEFT_GPIO, 0);
+        gpio_set_level(STEER_RIGHT_GPIO, 0);
+        ESP_LOGI(STEER_TAG, "Roda dipaksa lurus");
+    }
 }
 
-void roda_lurus() {
-    gpio_set_level(STEER_LEFT_GPIO, 0);
-    gpio_set_level(STEER_RIGHT_GPIO, 0);
-}
-}
+
 
 Application::Application() {
     event_group_ = xEventGroupCreate();
