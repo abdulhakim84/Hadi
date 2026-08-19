@@ -295,6 +295,25 @@ void McpServer::AddUserOnlyTools() {
                 settings.SetString("download_url", url);
                 return true;
             });
+      // TAMBAHKAN TOOL STERING DI SINI (Baris 274):
+    AddUserOnlyTool("self.steer_car", "Mengontrol arah kemudi mobil RC (kiri, kanan, lurus)",
+        PropertyList({
+            Property("direction", kPropertyTypeString, "Arah kemudi: 'kiri', 'kanan', atau 'lurus'")
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto direction = properties["direction"].value<std::string>();
+            if (direction == "kiri") {
+                belok_kiri();
+                return "Mobil belok kiri";
+            } else if (direction == "kanan") {
+                belok_kanan();
+                return "Mobil belok kanan";
+            } else if (direction == "lurus") {
+                roda_lurus();
+                return "Roda kembali lurus";
+            }
+            return "Arah tidak valid";
+        });
 }
 
 void McpServer::AddTool(McpTool* tool) {
