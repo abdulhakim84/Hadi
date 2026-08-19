@@ -17,6 +17,11 @@
 #include "settings.h"
 #include "lvgl_theme.h"
 #include "lvgl_display.h"
+extern "C" {
+    void belok_kiri();
+    void belok_kanan();
+    void roda_lurus();
+}
 
 #define TAG "MCP"
 
