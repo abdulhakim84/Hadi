@@ -18,10 +18,11 @@
 #include "lvgl_theme.h"
 #include "lvgl_display.h"
 extern "C" {
-    void belok_kiri();
-    void belok_kanan();
+    void belok_kiri_durasi(int duration_ms);
+    void belok_kanan_durasi(int duration_ms);
     void roda_lurus();
 }
+
 
 #define TAG "MCP"
 
@@ -125,21 +126,19 @@ void McpServer::AddCommonTools() {
             });
     }
 #endif
-     // TAMBAHKAN KODE INI DI DALAM AddCommonTools():
-    AddTool("self.steer_car",
+AddTool("self.steer_car",
         "Control steering direction of the RC car. Call this tool when user asks to turn left, turn right, or go straight.",
         PropertyList({
             Property("direction", kPropertyTypeString, "Direction: 'kiri', 'kanan', or 'lurus'")
         }),
         [](const PropertyList& properties) -> ReturnValue {
             auto direction = properties["direction"].value<std::string>();
-            ESP_LOGI("MCP_STEER", "Eksekusi kemudi: %s", direction.c_str());
 
             if (direction == "kiri") {
-                belok_kiri();
+                belok_kiri_durasi(2000); // Tahan belok kiri selama 2000 ms (2 detik)
                 return "Berhasil belok kiri";
             } else if (direction == "kanan") {
-                belok_kanan();
+                belok_kanan_durasi(2000); // Tahan belok kanan selama 2000 ms (2 detik)
                 return "Berhasil belok kanan";
             } else if (direction == "lurus") {
                 roda_lurus();
@@ -147,7 +146,7 @@ void McpServer::AddCommonTools() {
             }
             return "Arah tidak valid";
         });
-
+    
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), original_tools.begin(), original_tools.end());
 }
