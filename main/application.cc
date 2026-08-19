@@ -18,6 +18,15 @@
 #include <cstring>
 
 #define TAG "Application"
+// Definisi pin 11 dan 12 langsung di application.cc
+#ifndef STEER_LEFT_GPIO
+#define STEER_LEFT_GPIO GPIO_NUM_11
+#endif
+
+#ifndef STEER_RIGHT_GPIO
+#define STEER_RIGHT_GPIO GPIO_NUM_12
+#endif
+
 void setup_steering() {
     gpio_reset_pin(STEER_LEFT_GPIO);
     gpio_reset_pin(STEER_RIGHT_GPIO);
