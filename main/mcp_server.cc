@@ -125,6 +125,28 @@ void McpServer::AddCommonTools() {
             });
     }
 #endif
+     // TAMBAHKAN KODE INI DI DALAM AddCommonTools():
+    AddTool("self.steer_car",
+        "Control steering direction of the RC car. Call this tool when user asks to turn left, turn right, or go straight.",
+        PropertyList({
+            Property("direction", kPropertyTypeString, "Direction: 'kiri', 'kanan', or 'lurus'")
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto direction = properties["direction"].value<std::string>();
+            ESP_LOGI("MCP_STEER", "Eksekusi kemudi: %s", direction.c_str());
+
+            if (direction == "kiri") {
+                belok_kiri();
+                return "Berhasil belok kiri";
+            } else if (direction == "kanan") {
+                belok_kanan();
+                return "Berhasil belok kanan";
+            } else if (direction == "lurus") {
+                roda_lurus();
+                return "Roda kembali lurus";
+            }
+            return "Arah tidak valid";
+        });
 
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), original_tools.begin(), original_tools.end());
@@ -300,25 +322,6 @@ void McpServer::AddUserOnlyTools() {
                 settings.SetString("download_url", url);
                 return true;
             });
-      // TAMBAHKAN TOOL STERING DI SINI (Baris 274):
-    AddUserOnlyTool("self.steer_car", "Mengontrol arah kemudi mobil RC (kiri, kanan, lurus)",
-        PropertyList({
-            Property("direction", kPropertyTypeString, "Arah kemudi: 'kiri', 'kanan', atau 'lurus'")
-        }),
-        [](const PropertyList& properties) -> ReturnValue {
-            auto direction = properties["direction"].value<std::string>();
-            if (direction == "kiri") {
-                belok_kiri();
-                return "Mobil belok kiri";
-            } else if (direction == "kanan") {
-                belok_kanan();
-                return "Mobil belok kanan";
-            } else if (direction == "lurus") {
-                roda_lurus();
-                return "Roda kembali lurus";
-            }
-            return "Arah tidak valid";
-        });
 }
 
 void McpServer::AddTool(McpTool* tool) {
