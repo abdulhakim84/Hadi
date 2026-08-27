@@ -21,6 +21,21 @@
 
 #define TAG "Application"
 
+#ifndef STEER_LEFT_GPIO
+#define STEER_LEFT_GPIO GPIO_NUM_11
+#endif
+
+#ifndef STEER_RIGHT_GPIO
+#define STEER_RIGHT_GPIO GPIO_NUM_12
+#endif
+
+#ifndef MOTOR_FORWARD_GPIO
+#define MOTOR_FORWARD_GPIO GPIO_NUM_13
+#endif
+
+#ifndef MOTOR_BACKWARD_GPIO
+#define MOTOR_BACKWARD_GPIO GPIO_NUM_14
+#endif
 
 #define RC_TAG "RC_CONTROL"
 
