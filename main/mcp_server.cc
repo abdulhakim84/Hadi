@@ -18,10 +18,20 @@
 #include "lvgl_theme.h"
 #include "lvgl_display.h"
 extern "C" {
+    // Inisialisasi Hardware
+    void setup_rc_car();
+
+    // Kontrol Kemudi (Steering + Maju)
     void belok_kiri_durasi(int duration_ms);
     void belok_kanan_durasi(int duration_ms);
     void roda_lurus();
+
+    // Kontrol Penggerak Lurus (Drive Motor)
+    void maju_durasi(int duration_ms);
+    void mundur_durasi(int duration_ms);
+    void motor_berhenti();
 }
+
 
 
 #define TAG "MCP"
@@ -126,29 +136,59 @@ void McpServer::AddCommonTools() {
             });
     }
 #endif
-AddTool("self.steer_car",
-        "Control steering direction of the RC car. Call this tool when user asks to turn left, turn right, or go straight.",
-        PropertyList({
-            Property("direction", kPropertyTypeString, "Direction: 'kiri', 'kanan', or 'lurus'")
-        }),
-        [](const PropertyList& properties) -> ReturnValue {
-            auto direction = properties["direction"].value<std::string>();
+        // 1. Tool Belok (Steering + Drive)
+    // Digunakan saat pengguna minta: belok kiri, belok kanan, atau luruskan roda
+    AddTool("self.steer_car",
+            "Turn the RC car left or right (front wheels steer and rear motor drives forward simultaneously), or straighten wheels.",
+            PropertyList({
+                Property("direction", kPropertyTypeString, "Direction: 'kiri', 'kanan', or 'lurus'"),
+                Property("duration_ms", kPropertyTypeInteger, "Duration in milliseconds (optional, default 2000ms)", false)
+            }),
+            [](const PropertyList& properties) -> ReturnValue {
+                auto direction = properties["direction"].value<std::string>();
+                int duration_ms = properties.contains("duration_ms") ? properties["duration_ms"].value<int>() : 2000;
 
-            if (direction == "kiri") {
-                belok_kiri_durasi(2000); // Tahan belok kiri selama 2000 ms (2 detik)
-                return "Berhasil belok kiri";
-            } else if (direction == "kanan") {
-                belok_kanan_durasi(2000); // Tahan belok kanan selama 2000 ms (2 detik)
-                return "Berhasil belok kanan";
-            } else if (direction == "lurus") {
-                roda_lurus();
-                return "Roda kembali lurus";
-            }
-            return "Arah tidak valid";
-        });
-    
+                if (direction == "kiri") {
+                    belok_kiri_durasi(duration_ms);
+                    return "Berhasil belok kiri sambil maju";
+                } else if (direction == "kanan") {
+                    belok_kanan_durasi(duration_ms);
+                    return "Berhasil belok kanan sambil maju";
+                } else if (direction == "lurus") {
+                    roda_lurus();
+                    return "Roda kembali lurus";
+                }
+                return "Arah steering tidak valid";
+            });
+
+    // 2. Tool Gerak Lurus (Drive Only)
+    // Digunakan saat pengguna minta: maju lurus, mundur, atau stop
+    AddTool("self.drive_car",
+            "Drive the RC car straight forward, backward, or stop the motor without steering.",
+            PropertyList({
+                Property("action", kPropertyTypeString, "Action: 'maju', 'mundur', or 'berhenti'"),
+                Property("duration_ms", kPropertyTypeInteger, "Duration in milliseconds (optional, default 2000ms)", false)
+            }),
+            [](const PropertyList& properties) -> ReturnValue {
+                auto action = properties["action"].value<std::string>();
+                int duration_ms = properties.contains("duration_ms") ? properties["duration_ms"].value<int>() : 2000;
+
+                if (action == "maju") {
+                    maju_durasi(duration_ms);
+                    return "Mobil bergerak maju lurus";
+                } else if (action == "mundur") {
+                    mundur_durasi(duration_ms);
+                    return "Mobil bergerak mundur lurus";
+                } else if (action == "berhenti" || action == "stop") {
+                    motor_berhenti();
+                    return "Motor penggerak berhenti";
+                }
+                return "Aksi motor tidak valid";
+            });
+
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), original_tools.begin(), original_tools.end());
+
 }
 
 void McpServer::AddUserOnlyTools() {
