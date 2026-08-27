@@ -136,56 +136,48 @@ void McpServer::AddCommonTools() {
             });
     }
 #endif
-        // 1. Tool Belok (Steering + Drive)
-    // Digunakan saat pengguna minta: belok kiri, belok kanan, atau luruskan roda
     AddTool("self.steer_car",
-            "Turn the RC car left or right (front wheels steer and rear motor drives forward simultaneously), or straighten wheels.",
+            "Control steering direction of the RC car. Call this tool when user asks to turn left, turn right, or go straight.",
             PropertyList({
-                Property("direction", kPropertyTypeString, "Direction: 'kiri', 'kanan', or 'lurus'"),
-                Property("duration_ms", kPropertyTypeInteger, "Duration in milliseconds (optional, default 2000ms)", false)
+                Property("direction", kPropertyTypeString, "Direction: 'kiri', 'kanan', or 'lurus'")
             }),
             [](const PropertyList& properties) -> ReturnValue {
                 auto direction = properties["direction"].value<std::string>();
-                int duration_ms = properties.contains("duration_ms") ? properties["duration_ms"].value<int>() : 2000;
 
                 if (direction == "kiri") {
-                    belok_kiri_durasi(duration_ms);
+                    belok_kiri_durasi(2000);
                     return "Berhasil belok kiri sambil maju";
                 } else if (direction == "kanan") {
-                    belok_kanan_durasi(duration_ms);
+                    belok_kanan_durasi(2000);
                     return "Berhasil belok kanan sambil maju";
                 } else if (direction == "lurus") {
                     roda_lurus();
                     return "Roda kembali lurus";
                 }
-                return "Arah steering tidak valid";
+                return "Arah tidak valid";
             });
 
-    // 2. Tool Gerak Lurus (Drive Only)
-    // Digunakan saat pengguna minta: maju lurus, mundur, atau stop
     AddTool("self.drive_car",
-            "Drive the RC car straight forward, backward, or stop the motor without steering.",
+            "Control movement direction of the RC car for straight line driving.",
             PropertyList({
-                Property("action", kPropertyTypeString, "Action: 'maju', 'mundur', or 'berhenti'"),
-                Property("duration_ms", kPropertyTypeInteger, "Duration in milliseconds (optional, default 2000ms)", false)
+                Property("action", kPropertyTypeString, "Action: 'maju', 'mundur', or 'berhenti'")
             }),
             [](const PropertyList& properties) -> ReturnValue {
                 auto action = properties["action"].value<std::string>();
-                int duration_ms = properties.contains("duration_ms") ? properties["duration_ms"].value<int>() : 2000;
 
                 if (action == "maju") {
-                    maju_durasi(duration_ms);
+                    maju_durasi(2000);
                     return "Mobil bergerak maju lurus";
                 } else if (action == "mundur") {
-                    mundur_durasi(duration_ms);
+                    mundur_durasi(2000);
                     return "Mobil bergerak mundur lurus";
                 } else if (action == "berhenti" || action == "stop") {
                     motor_berhenti();
                     return "Motor penggerak berhenti";
                 }
-                return "Aksi motor tidak valid";
+                return "Aksi tidak valid";
             });
-
+    
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), original_tools.begin(), original_tools.end());
 
