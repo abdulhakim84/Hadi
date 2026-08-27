@@ -21,6 +21,8 @@
 
 #define TAG "Application"
 
+
+// --- KONFIGURASI PIN STEERING ---
 #ifndef STEER_LEFT_GPIO
 #define STEER_LEFT_GPIO GPIO_NUM_11
 #endif
@@ -29,80 +31,195 @@
 #define STEER_RIGHT_GPIO GPIO_NUM_12
 #endif
 
-#define STEER_TAG "RC_STEER"
+// --- KONFIGURASI PIN MOTOR DRIVE ---
+#ifndef MOTOR_FORWARD_GPIO
+#define MOTOR_FORWARD_GPIO GPIO_NUM_13
+#endif
+
+#ifndef MOTOR_BACKWARD_GPIO
+#define MOTOR_BACKWARD_GPIO GPIO_NUM_14
+#endif
+
+// Durasi (ms) dorongan motor ke arah berlawanan untuk mengembalikan roda ke tengah
+// Sesuaikan nilai ini dengan mekanik RC Anda
+#define STEER_CENTER_PULSE_MS 250
+
+#define RC_TAG "RC_CONTROL"
+
+typedef enum {
+    STEER_CENTER,
+    STEER_LEFT,
+    STEER_RIGHT
+} SteerState;
 
 static TaskHandle_t steer_task_handle = NULL;
+static TaskHandle_t drive_task_handle = NULL;
+static SteerState current_steer_state = STEER_CENTER;
 
 struct SteerParams {
     int left_level;
     int right_level;
     int duration_ms;
+    int center_pulse_ms;
 };
 
-// Task latar belakang untuk menahan HIGH lalu otomatis LOW
+struct DriveParams {
+    int fwd_level;
+    int bwd_level;
+    int duration_ms;
+};
+
+// ==================== STEERING TASK ====================
 void steer_timer_task(void* pvParameters) {
     SteerParams* params = (SteerParams*)pvParameters;
     
+    // 1. Belok ke arah tujuan
     gpio_set_level(STEER_LEFT_GPIO, params->left_level);
     gpio_set_level(STEER_RIGHT_GPIO, params->right_level);
+    current_steer_state = params->left_level ? STEER_LEFT : STEER_RIGHT;
 
-    // Tahan posisi HIGH selama durasi (misal 2000ms / 2 detik)
+    // 2. Tahan posisi belok
     vTaskDelay(pdMS_TO_TICKS(params->duration_ms));
 
-    // Matikan sinyal (LOW) agar pegas mengembalikan roda ke tengah & dinamo tidak panas
+    // 3. Kembalikan roda secara aktif ke tengah (Active Centering)
+    if (current_steer_state == STEER_LEFT) {
+        gpio_set_level(STEER_LEFT_GPIO, 0);
+        gpio_set_level(STEER_RIGHT_GPIO, 1); // Dorong ke kanan sebentar
+        vTaskDelay(pdMS_TO_TICKS(params->center_pulse_ms));
+    } else if (current_steer_state == STEER_RIGHT) {
+        gpio_set_level(STEER_RIGHT_GPIO, 0);
+        gpio_set_level(STEER_LEFT_GPIO, 1); // Dorong ke kiri sebentar
+        vTaskDelay(pdMS_TO_TICKS(params->center_pulse_ms));
+    }
+
+    // 4. Matikan semua sinyal steering
     gpio_set_level(STEER_LEFT_GPIO, 0);
     gpio_set_level(STEER_RIGHT_GPIO, 0);
-    ESP_LOGI(STEER_TAG, "Durasi selesai: Roda kembali lurus oleh pegas");
+    current_steer_state = STEER_CENTER;
+    ESP_LOGI(RC_TAG, "Kemudi berhasil kembali aktif ke posisi tengah");
 
     delete params;
     steer_task_handle = NULL;
     vTaskDelete(NULL);
 }
 
-void trigger_steer(int left, int right, int duration_ms) {
-    // Jika sedang ada proses belok yang berjalan, batalkan task sebelumnya
+void trigger_steer(int left, int right, int duration_ms, int center_pulse_ms) {
     if (steer_task_handle != NULL) {
         vTaskDelete(steer_task_handle);
         steer_task_handle = NULL;
     }
 
-    SteerParams* params = new SteerParams{left, right, duration_ms};
+    SteerParams* params = new SteerParams{left, right, duration_ms, center_pulse_ms};
     xTaskCreate(steer_timer_task, "steer_timer_task", 2048, params, 5, &steer_task_handle);
 }
 
+// ==================== MOTOR DRIVE TASK ====================
+void drive_timer_task(void* pvParameters) {
+    DriveParams* params = (DriveParams*)pvParameters;
+    
+    gpio_set_level(MOTOR_FORWARD_GPIO, params->fwd_level);
+    gpio_set_level(MOTOR_BACKWARD_GPIO, params->bwd_level);
+
+    vTaskDelay(pdMS_TO_TICKS(params->duration_ms));
+
+    gpio_set_level(MOTOR_FORWARD_GPIO, 0);
+    gpio_set_level(MOTOR_BACKWARD_GPIO, 0);
+    ESP_LOGI(RC_TAG, "Motor berhenti");
+
+    delete params;
+    drive_task_handle = NULL;
+    vTaskDelete(NULL);
+}
+
+void trigger_drive(int fwd, int bwd, int duration_ms) {
+    if (drive_task_handle != NULL) {
+        vTaskDelete(drive_task_handle);
+        drive_task_handle = NULL;
+    }
+
+    DriveParams* params = new DriveParams{fwd, bwd, duration_ms};
+    xTaskCreate(drive_timer_task, "drive_timer_task", 2048, params, 5, &drive_task_handle);
+}
+
+// ==================== C INTERFACE ====================
+// ==================== C INTERFACE ====================
 extern "C" {
-    void setup_steering() {
+    void setup_rc_car() {
         gpio_reset_pin(STEER_LEFT_GPIO);
         gpio_reset_pin(STEER_RIGHT_GPIO);
         gpio_set_direction(STEER_LEFT_GPIO, GPIO_MODE_OUTPUT);
         gpio_set_direction(STEER_RIGHT_GPIO, GPIO_MODE_OUTPUT);
         gpio_set_level(STEER_LEFT_GPIO, 0);
         gpio_set_level(STEER_RIGHT_GPIO, 0);
+
+        gpio_reset_pin(MOTOR_FORWARD_GPIO);
+        gpio_reset_pin(MOTOR_BACKWARD_GPIO);
+        gpio_set_direction(MOTOR_FORWARD_GPIO, GPIO_MODE_OUTPUT);
+        gpio_set_direction(MOTOR_BACKWARD_GPIO, GPIO_MODE_OUTPUT);
+        gpio_set_level(MOTOR_FORWARD_GPIO, 0);
+        gpio_set_level(MOTOR_BACKWARD_GPIO, 0);
+        
+        current_steer_state = STEER_CENTER;
+        ESP_LOGI(RC_TAG, "RC Car GPIO Berhasil Dikonfigurasi");
     }
 
-    // Belok kiri & tahan selama durasi ms (default 2000 ms = 2 detik)
-    void belok_kiri_durasi(int duration_ms) {
-        ESP_LOGI(STEER_TAG, "Belok Kiri dipemicu selama %d ms", duration_ms);
-        trigger_steer(1, 0, duration_ms);
+    // Belok kiri + Roda belakang otomatis maju
+    void belok_kiri_durasi(int duration_ms, int center_pulse_ms = STEER_CENTER_PULSE_MS) {
+        ESP_LOGI(RC_TAG, "Belok Kiri + Maju dipemicu selama %d ms", duration_ms);
+        trigger_steer(1, 0, duration_ms, center_pulse_ms); // Roda depan belok kiri
+        trigger_drive(1, 0, duration_ms);                  // Roda belakang maju
     }
 
-    // Belok kanan & tahan selama durasi ms
-    void belok_kanan_durasi(int duration_ms) {
-        ESP_LOGI(STEER_TAG, "Belok Kanan dipemicu selama %d ms", duration_ms);
-        trigger_steer(0, 1, duration_ms);
+    // Belok kanan + Roda belakang otomatis maju
+    void belok_kanan_durasi(int duration_ms, int center_pulse_ms = STEER_CENTER_PULSE_MS) {
+        ESP_LOGI(RC_TAG, "Belok Kanan + Maju dipemicu selama %d ms", duration_ms);
+        trigger_steer(0, 1, duration_ms, center_pulse_ms); // Roda depan belok kanan
+        trigger_drive(1, 0, duration_ms);                  // Roda belakang maju
     }
 
+    // Paksa roda lurus dari posisi saat ini
     void roda_lurus() {
         if (steer_task_handle != NULL) {
             vTaskDelete(steer_task_handle);
             steer_task_handle = NULL;
         }
+
+        if (current_steer_state == STEER_LEFT) {
+            gpio_set_level(STEER_LEFT_GPIO, 0);
+            gpio_set_level(STEER_RIGHT_GPIO, 1);
+            vTaskDelay(pdMS_TO_TICKS(STEER_CENTER_PULSE_MS));
+        } else if (current_steer_state == STEER_RIGHT) {
+            gpio_set_level(STEER_RIGHT_GPIO, 0);
+            gpio_set_level(STEER_LEFT_GPIO, 1);
+            vTaskDelay(pdMS_TO_TICKS(STEER_CENTER_PULSE_MS));
+        }
+
         gpio_set_level(STEER_LEFT_GPIO, 0);
         gpio_set_level(STEER_RIGHT_GPIO, 0);
-        ESP_LOGI(STEER_TAG, "Roda dipaksa lurus");
+        current_steer_state = STEER_CENTER;
+        ESP_LOGI(RC_TAG, "Roda dipaksa balik ke tengah");
+    }
+
+    void maju_durasi(int duration_ms) {
+        ESP_LOGI(RC_TAG, "Maju dipemicu selama %d ms", duration_ms);
+        trigger_drive(1, 0, duration_ms);
+    }
+
+    void mundur_durasi(int duration_ms) {
+        ESP_LOGI(RC_TAG, "Mundur dipemicu selama %d ms", duration_ms);
+        trigger_drive(0, 1, duration_ms);
+    }
+
+    void motor_berhenti() {
+        if (drive_task_handle != NULL) {
+            vTaskDelete(drive_task_handle);
+            drive_task_handle = NULL;
+        }
+        gpio_set_level(MOTOR_FORWARD_GPIO, 0);
+        gpio_set_level(MOTOR_BACKWARD_GPIO, 0);
+        ESP_LOGI(RC_TAG, "Motor dipaksa berhenti");
     }
 }
-
 
 
 Application::Application() {
