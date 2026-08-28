@@ -223,7 +223,7 @@ void McpServer::AddCommonTools() {
 
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), original_tools.begin(), original_tools.end());
-
+}
 
 void McpServer::AddUserOnlyTools() {
     // System tools
