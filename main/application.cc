@@ -257,6 +257,9 @@ extern "C" {
     }
 }
 
+Application::Application() {
+    // Biarkan kosong jika tidak ada inisialisasi khusus
+}
 
 Application::~Application() {
     if (clock_timer_handle_ != nullptr) {
