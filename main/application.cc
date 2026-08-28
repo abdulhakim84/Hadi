@@ -29,7 +29,7 @@
 #define STEER_CENTER_PULSE_MS 250
 
 // --- PENGATURAN KECEPATAN MOTOR ---
-#define MOTOR_PWM_SLOW        120  // Kecepatan pelan (0 - 255)
+#define MOTOR_PWM_SLOW        200  // Kecepatan pelan (0 - 255)
 #define MOTOR_PWM_FAST        255  // Kecepatan cepat (0 - 255)
 #define MOTOR_PWM_FREQ        5000
 #define MOTOR_PWM_RESOLUTION  LEDC_TIMER_8_BIT
