@@ -141,7 +141,6 @@ void McpServer::AddCommonTools() {
             });
     }
 #endif
-    
   AddTool("self.steer_car",
             "Control steering direction of the RC car. Supports steering without moving, or turning while driving (slow or fast).",
             PropertyList({
@@ -150,9 +149,9 @@ void McpServer::AddCommonTools() {
             }),
             [](const PropertyList& properties) -> ReturnValue {
                 auto direction = properties["direction"].value<std::string>();
-                std::string mode = "pelan";
-                if (properties.has("mode")) {
-                    mode = properties["mode"].value<std::string>();
+                std::string mode = properties["mode"].value<std::string>();
+                if (mode.empty()) {
+                    mode = "pelan";
                 }
 
                 if (direction == "kiri") {
@@ -192,9 +191,9 @@ void McpServer::AddCommonTools() {
             }),
             [](const PropertyList& properties) -> ReturnValue {
                 auto action = properties["action"].value<std::string>();
-                std::string speed = "pelan";
-                if (properties.has("speed")) {
-                    speed = properties["speed"].value<std::string>();
+                std::string speed = properties["speed"].value<std::string>();
+                if (speed.empty()) {
+                    speed = "pelan";
                 }
 
                 if (action == "maju_pelan" || (action == "maju" && speed == "pelan")) {
@@ -224,7 +223,7 @@ void McpServer::AddCommonTools() {
 
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), original_tools.begin(), original_tools.end());
-}                   
+
 
 void McpServer::AddUserOnlyTools() {
     // System tools
