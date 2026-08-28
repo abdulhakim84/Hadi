@@ -19,18 +19,18 @@
 #include <cJSON.h>
 #include <cstring>
 #include "driver/ledc.h"
-
+#include "esp_log.h"
 #define TAG "Application"
 
-
-#define STEER_LEFT_GPIO   GPIO_NUM_11
-#define STEER_RIGHT_GPIO  GPIO_NUM_12
-#define MOTOR_FORWARD_GPIO  GPIO_NUM_13
-#define MOTOR_BACKWARD_GPIO GPIO_NUM_14
+#define STEER_LEFT_GPIO       GPIO_NUM_11
+#define STEER_RIGHT_GPIO      GPIO_NUM_12
+#define MOTOR_FORWARD_GPIO    GPIO_NUM_13
+#define MOTOR_BACKWARD_GPIO   GPIO_NUM_14
 #define STEER_CENTER_PULSE_MS 250
 
-// --- PENGATURAN KECEPATAN MOTOR (0 = MATI, 255 = KECEPATAN FULL) ---
-#define MOTOR_PWM_SPEED       140  // Ubah angka ini untuk mengatur kecepatan roda
+// --- PENGATURAN KECEPATAN MOTOR ---
+#define MOTOR_PWM_SLOW        120  // Kecepatan pelan (0 - 255)
+#define MOTOR_PWM_FAST        255  // Kecepatan cepat (0 - 255)
 #define MOTOR_PWM_FREQ        5000
 #define MOTOR_PWM_RESOLUTION  LEDC_TIMER_8_BIT
 #define LEDC_MODE             LEDC_LOW_SPEED_MODE
@@ -55,10 +55,11 @@ struct SteerParams {
 struct DriveParams {
     int fwd_level;
     int bwd_level;
+    int speed;
     int duration_ms;
 };
 
-// --- TASK KEMUDI (TETAP SAMA) ---
+// --- TASK KEMUDI ---
 void steer_timer_task(void* pvParameters) {
     SteerParams* params = (SteerParams*)pvParameters;
     
@@ -97,12 +98,12 @@ void trigger_steer(int left, int right, int duration_ms) {
     xTaskCreate(steer_timer_task, "steer_timer_task", 2048, params, 5, &steer_task_handle);
 }
 
-// --- TASK MOTOR PENGGERAK (DISESUAIKAN UNTUK PWM) ---
+// --- TASK MOTOR PENGGERAK ---
 void drive_timer_task(void* pvParameters) {
     DriveParams* params = (DriveParams*)pvParameters;
     
-    uint32_t fwd_duty = params->fwd_level ? MOTOR_PWM_SPEED : 0;
-    uint32_t bwd_duty = params->bwd_level ? MOTOR_PWM_SPEED : 0;
+    uint32_t fwd_duty = params->fwd_level ? params->speed : 0;
+    uint32_t bwd_duty = params->bwd_level ? params->speed : 0;
 
     ledc_set_duty(LEDC_MODE, LEDC_FWD_CHANNEL, fwd_duty);
     ledc_update_duty(LEDC_MODE, LEDC_FWD_CHANNEL);
@@ -122,19 +123,19 @@ void drive_timer_task(void* pvParameters) {
     vTaskDelete(NULL);
 }
 
-void trigger_drive(int fwd, int bwd, int duration_ms) {
+void trigger_drive(int fwd, int bwd, int speed, int duration_ms) {
     if (drive_task_handle != NULL) {
         vTaskDelete(drive_task_handle);
         drive_task_handle = NULL;
     }
-    DriveParams* params = new DriveParams{fwd, bwd, duration_ms};
+    DriveParams* params = new DriveParams{fwd, bwd, speed, duration_ms};
     xTaskCreate(drive_timer_task, "drive_timer_task", 2048, params, 5, &drive_task_handle);
 }
 
 // --- C INTERFACE ---
 extern "C" {
     void setup_steering() {
-        // Inisialisasi GPIO Steering (Tetap sama)
+        // Inisialisasi GPIO Steering
         gpio_reset_pin(STEER_LEFT_GPIO);
         gpio_reset_pin(STEER_RIGHT_GPIO);
         gpio_set_direction(STEER_LEFT_GPIO, GPIO_MODE_OUTPUT);
@@ -178,14 +179,13 @@ extern "C" {
         ESP_LOGI(RC_TAG, "Inisialisasi GPIO Steering & Motor Selesai");
     }
 
-    void belok_kiri_durasi(int duration_ms) {
+    // --- HANYA MEMBELOKKAN RODA (TANPA BERJALAN) ---
+    void hanya_belok_kiri(int duration_ms) {
         trigger_steer(1, 0, duration_ms);
-        trigger_drive(1, 0, duration_ms);
     }
 
-    void belok_kanan_durasi(int duration_ms) {
+    void hanya_belok_kanan(int duration_ms) {
         trigger_steer(0, 1, duration_ms);
-        trigger_drive(1, 0, duration_ms);
     }
 
     void roda_lurus() {
@@ -207,12 +207,42 @@ extern "C" {
         current_steer_state = STEER_CENTER;
     }
 
-    void maju_durasi(int duration_ms) {
-        trigger_drive(1, 0, duration_ms);
+    // --- BELOK SAMBIL BERJALAN ---
+    void belok_kiri_pelan(int duration_ms) {
+        trigger_steer(1, 0, duration_ms);
+        trigger_drive(1, 0, MOTOR_PWM_SLOW, duration_ms);
     }
 
-    void mundur_durasi(int duration_ms) {
-        trigger_drive(0, 1, duration_ms);
+    void belok_kanan_pelan(int duration_ms) {
+        trigger_steer(0, 1, duration_ms);
+        trigger_drive(1, 0, MOTOR_PWM_SLOW, duration_ms);
+    }
+
+    void belok_kiri_cepat(int duration_ms) {
+        trigger_steer(1, 0, duration_ms);
+        trigger_drive(1, 0, MOTOR_PWM_FAST, duration_ms);
+    }
+
+    void belok_kanan_cepat(int duration_ms) {
+        trigger_steer(0, 1, duration_ms);
+        trigger_drive(1, 0, MOTOR_PWM_FAST, duration_ms);
+    }
+
+    // --- KONTROL PENGGERAK LURUS ---
+    void maju_pelan(int duration_ms) {
+        trigger_drive(1, 0, MOTOR_PWM_SLOW, duration_ms);
+    }
+
+    void mundur_pelan(int duration_ms) {
+        trigger_drive(0, 1, MOTOR_PWM_SLOW, duration_ms);
+    }
+
+    void maju_cepat(int duration_ms) {
+        trigger_drive(1, 0, MOTOR_PWM_FAST, duration_ms);
+    }
+
+    void mundur_cepat(int duration_ms) {
+        trigger_drive(0, 1, MOTOR_PWM_FAST, duration_ms);
     }
 
     void motor_berhenti() {
@@ -227,31 +257,6 @@ extern "C" {
     }
 }
 
-Application::Application() {
-    event_group_ = xEventGroupCreate();
-
-#if CONFIG_USE_DEVICE_AEC && CONFIG_USE_SERVER_AEC
-#error "CONFIG_USE_DEVICE_AEC and CONFIG_USE_SERVER_AEC cannot be enabled at the same time"
-#elif CONFIG_USE_DEVICE_AEC
-    aec_mode_ = kAecOnDeviceSide;
-#elif CONFIG_USE_SERVER_AEC
-    aec_mode_ = kAecOnServerSide;
-#else
-    aec_mode_ = kAecOff;
-#endif
-
-    esp_timer_create_args_t clock_timer_args = {.callback =
-                                                    [](void* arg) {
-                                                        Application* app = (Application*)arg;
-                                                        xEventGroupSetBits(app->event_group_,
-                                                                           MAIN_EVENT_CLOCK_TICK);
-                                                    },
-                                                .arg = this,
-                                                .dispatch_method = ESP_TIMER_TASK,
-                                                .name = "clock_timer",
-                                                .skip_unhandled_events = true};
-    esp_timer_create(&clock_timer_args, &clock_timer_handle_);
-}
 
 Application::~Application() {
     if (clock_timer_handle_ != nullptr) {
