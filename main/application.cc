@@ -18,14 +18,25 @@
 #include <arpa/inet.h>
 #include <cJSON.h>
 #include <cstring>
+#include "driver/ledc.h"
 
 #define TAG "Application"
+
 
 #define STEER_LEFT_GPIO   GPIO_NUM_11
 #define STEER_RIGHT_GPIO  GPIO_NUM_12
 #define MOTOR_FORWARD_GPIO  GPIO_NUM_13
 #define MOTOR_BACKWARD_GPIO GPIO_NUM_14
 #define STEER_CENTER_PULSE_MS 250
+
+// --- PENGATURAN KECEPATAN MOTOR (0 = MATI, 255 = KECEPATAN FULL) ---
+#define MOTOR_PWM_SPEED       140  // Ubah angka ini untuk mengatur kecepatan roda
+#define MOTOR_PWM_FREQ        5000
+#define MOTOR_PWM_RESOLUTION  LEDC_TIMER_8_BIT
+#define LEDC_MODE             LEDC_LOW_SPEED_MODE
+#define LEDC_TIMER            LEDC_TIMER_0
+#define LEDC_FWD_CHANNEL      LEDC_CHANNEL_0
+#define LEDC_BWD_CHANNEL      LEDC_CHANNEL_1
 
 #define RC_TAG "RC_CONTROL"
 
@@ -47,7 +58,7 @@ struct DriveParams {
     int duration_ms;
 };
 
-// --- TASK KEMUDI ---
+// --- TASK KEMUDI (TETAP SAMA) ---
 void steer_timer_task(void* pvParameters) {
     SteerParams* params = (SteerParams*)pvParameters;
     
@@ -86,17 +97,25 @@ void trigger_steer(int left, int right, int duration_ms) {
     xTaskCreate(steer_timer_task, "steer_timer_task", 2048, params, 5, &steer_task_handle);
 }
 
-// --- TASK MOTOR PENGGERAK ---
+// --- TASK MOTOR PENGGERAK (DISESUAIKAN UNTUK PWM) ---
 void drive_timer_task(void* pvParameters) {
     DriveParams* params = (DriveParams*)pvParameters;
     
-    gpio_set_level(MOTOR_FORWARD_GPIO, params->fwd_level);
-    gpio_set_level(MOTOR_BACKWARD_GPIO, params->bwd_level);
+    uint32_t fwd_duty = params->fwd_level ? MOTOR_PWM_SPEED : 0;
+    uint32_t bwd_duty = params->bwd_level ? MOTOR_PWM_SPEED : 0;
+
+    ledc_set_duty(LEDC_MODE, LEDC_FWD_CHANNEL, fwd_duty);
+    ledc_update_duty(LEDC_MODE, LEDC_FWD_CHANNEL);
+
+    ledc_set_duty(LEDC_MODE, LEDC_BWD_CHANNEL, bwd_duty);
+    ledc_update_duty(LEDC_MODE, LEDC_BWD_CHANNEL);
 
     vTaskDelay(pdMS_TO_TICKS(params->duration_ms));
 
-    gpio_set_level(MOTOR_FORWARD_GPIO, 0);
-    gpio_set_level(MOTOR_BACKWARD_GPIO, 0);
+    ledc_set_duty(LEDC_MODE, LEDC_FWD_CHANNEL, 0);
+    ledc_update_duty(LEDC_MODE, LEDC_FWD_CHANNEL);
+    ledc_set_duty(LEDC_MODE, LEDC_BWD_CHANNEL, 0);
+    ledc_update_duty(LEDC_MODE, LEDC_BWD_CHANNEL);
 
     delete params;
     drive_task_handle = NULL;
@@ -114,8 +133,8 @@ void trigger_drive(int fwd, int bwd, int duration_ms) {
 
 // --- C INTERFACE ---
 extern "C" {
-    // Nama fungsi tetap 'setup_steering()' sesuai yang dipanggil di application.cc
     void setup_steering() {
+        // Inisialisasi GPIO Steering (Tetap sama)
         gpio_reset_pin(STEER_LEFT_GPIO);
         gpio_reset_pin(STEER_RIGHT_GPIO);
         gpio_set_direction(STEER_LEFT_GPIO, GPIO_MODE_OUTPUT);
@@ -123,12 +142,37 @@ extern "C" {
         gpio_set_level(STEER_LEFT_GPIO, 0);
         gpio_set_level(STEER_RIGHT_GPIO, 0);
 
-        gpio_reset_pin(MOTOR_FORWARD_GPIO);
-        gpio_reset_pin(MOTOR_BACKWARD_GPIO);
-        gpio_set_direction(MOTOR_FORWARD_GPIO, GPIO_MODE_OUTPUT);
-        gpio_set_direction(MOTOR_BACKWARD_GPIO, GPIO_MODE_OUTPUT);
-        gpio_set_level(MOTOR_FORWARD_GPIO, 0);
-        gpio_set_level(MOTOR_BACKWARD_GPIO, 0);
+        // Inisialisasi LEDC PWM Motor
+        ledc_timer_config_t ledc_timer = {
+            .speed_mode       = LEDC_MODE,
+            .duty_resolution  = MOTOR_PWM_RESOLUTION,
+            .timer_num        = LEDC_TIMER,
+            .freq_hz          = MOTOR_PWM_FREQ,
+            .clk_cfg          = LEDC_AUTO_CLK
+        };
+        ledc_timer_config(&ledc_timer);
+
+        ledc_channel_config_t ledc_fwd = {
+            .gpio_num       = MOTOR_FORWARD_GPIO,
+            .speed_mode     = LEDC_MODE,
+            .channel        = LEDC_FWD_CHANNEL,
+            .intr_type      = LEDC_INTR_DISABLE,
+            .timer_sel      = LEDC_TIMER,
+            .duty           = 0,
+            .hpoint         = 0
+        };
+        ledc_channel_config(&ledc_fwd);
+
+        ledc_channel_config_t ledc_bwd = {
+            .gpio_num       = MOTOR_BACKWARD_GPIO,
+            .speed_mode     = LEDC_MODE,
+            .channel        = LEDC_BWD_CHANNEL,
+            .intr_type      = LEDC_INTR_DISABLE,
+            .timer_sel      = LEDC_TIMER,
+            .duty           = 0,
+            .hpoint         = 0
+        };
+        ledc_channel_config(&ledc_bwd);
         
         current_steer_state = STEER_CENTER;
         ESP_LOGI(RC_TAG, "Inisialisasi GPIO Steering & Motor Selesai");
@@ -136,12 +180,12 @@ extern "C" {
 
     void belok_kiri_durasi(int duration_ms) {
         trigger_steer(1, 0, duration_ms);
-        trigger_drive(1, 0, duration_ms); // Roda belakang ikut maju saat belok
+        trigger_drive(1, 0, duration_ms);
     }
 
     void belok_kanan_durasi(int duration_ms) {
         trigger_steer(0, 1, duration_ms);
-        trigger_drive(1, 0, duration_ms); // Roda belakang ikut maju saat belok
+        trigger_drive(1, 0, duration_ms);
     }
 
     void roda_lurus() {
@@ -176,12 +220,12 @@ extern "C" {
             vTaskDelete(drive_task_handle);
             drive_task_handle = NULL;
         }
-        gpio_set_level(MOTOR_FORWARD_GPIO, 0);
-        gpio_set_level(MOTOR_BACKWARD_GPIO, 0);
+        ledc_set_duty(LEDC_MODE, LEDC_FWD_CHANNEL, 0);
+        ledc_update_duty(LEDC_MODE, LEDC_FWD_CHANNEL);
+        ledc_set_duty(LEDC_MODE, LEDC_BWD_CHANNEL, 0);
+        ledc_update_duty(LEDC_MODE, LEDC_BWD_CHANNEL);
     }
 }
-             
-
 
 Application::Application() {
     event_group_ = xEventGroupCreate();
