@@ -27,14 +27,18 @@
 #define MOTOR_FORWARD_GPIO    GPIO_NUM_13
 #define MOTOR_BACKWARD_GPIO   GPIO_NUM_14
 
-// --- PENGATURAN KECEPATAN STANDAR ---
-#define MOTOR_PWM_SPEED       200  // Kecepatan standar
+// --- KECEPATAN STANDAR PWM (0 - 255) ---
+#define PWM_SPEED             200  // Kecepatan standar untuk motor penggerak & steering
 #define MOTOR_PWM_FREQ        5000
 #define MOTOR_PWM_RESOLUTION  LEDC_TIMER_8_BIT
 #define LEDC_MODE             LEDC_LOW_SPEED_MODE
 #define LEDC_TIMER            LEDC_TIMER_0
+
+// LEDC Channel Assignment (4 Channel PWM)
 #define LEDC_FWD_CHANNEL      LEDC_CHANNEL_0
 #define LEDC_BWD_CHANNEL      LEDC_CHANNEL_1
+#define LEDC_LEFT_CHANNEL     LEDC_CHANNEL_2
+#define LEDC_RIGHT_CHANNEL    LEDC_CHANNEL_3
 
 #define RC_TAG "RC_CONTROL"
 
@@ -42,30 +46,38 @@ static TaskHandle_t steer_task_handle = NULL;
 static TaskHandle_t drive_task_handle = NULL;
 
 struct SteerParams {
-    int left_level;
-    int right_level;
+    int left_enable;
+    int right_enable;
     int duration_ms;
 };
 
 struct DriveParams {
-    int fwd_level;
-    int bwd_level;
-    int speed;
+    int fwd_enable;
+    int bwd_enable;
     int duration_ms;
 };
 
-// --- TASK KEMUDI ---
+// --- TASK KEMUDI (PWM SOFT STEERING) ---
 void steer_timer_task(void* pvParameters) {
     SteerParams* params = (SteerParams*)pvParameters;
     
-    gpio_set_level(STEER_LEFT_GPIO, params->left_level);
-    gpio_set_level(STEER_RIGHT_GPIO, params->right_level);
+    uint32_t left_duty  = params->left_enable  ? PWM_SPEED : 0;
+    uint32_t right_duty = params->right_enable ? PWM_SPEED : 0;
+
+    // Gerakkan dinamo belok secara halus dengan PWM speed 200
+    ledc_set_duty(LEDC_MODE, LEDC_LEFT_CHANNEL, left_duty);
+    ledc_update_duty(LEDC_MODE, LEDC_LEFT_CHANNEL);
+
+    ledc_set_duty(LEDC_MODE, LEDC_RIGHT_CHANNEL, right_duty);
+    ledc_update_duty(LEDC_MODE, LEDC_RIGHT_CHANNEL);
 
     vTaskDelay(pdMS_TO_TICKS(params->duration_ms));
 
-    // Matikan sinyal ke motor belok tanpa membalikkan posisi (tanpa active centering)
-    gpio_set_level(STEER_LEFT_GPIO, 0);
-    gpio_set_level(STEER_RIGHT_GPIO, 0);
+    // Matikan arus dinamo belok (tanpa ada gerakan membalikkan roda)
+    ledc_set_duty(LEDC_MODE, LEDC_LEFT_CHANNEL, 0);
+    ledc_update_duty(LEDC_MODE, LEDC_LEFT_CHANNEL);
+    ledc_set_duty(LEDC_MODE, LEDC_RIGHT_CHANNEL, 0);
+    ledc_update_duty(LEDC_MODE, LEDC_RIGHT_CHANNEL);
 
     delete params;
     steer_task_handle = NULL;
@@ -85,8 +97,8 @@ void trigger_steer(int left, int right, int duration_ms) {
 void drive_timer_task(void* pvParameters) {
     DriveParams* params = (DriveParams*)pvParameters;
     
-    uint32_t fwd_duty = params->fwd_level ? params->speed : 0;
-    uint32_t bwd_duty = params->bwd_level ? params->speed : 0;
+    uint32_t fwd_duty = params->fwd_enable ? PWM_SPEED : 0;
+    uint32_t bwd_duty = params->bwd_enable ? PWM_SPEED : 0;
 
     ledc_set_duty(LEDC_MODE, LEDC_FWD_CHANNEL, fwd_duty);
     ledc_update_duty(LEDC_MODE, LEDC_FWD_CHANNEL);
@@ -106,27 +118,19 @@ void drive_timer_task(void* pvParameters) {
     vTaskDelete(NULL);
 }
 
-void trigger_drive(int fwd, int bwd, int speed, int duration_ms) {
+void trigger_drive(int fwd, int bwd, int duration_ms) {
     if (drive_task_handle != NULL) {
         vTaskDelete(drive_task_handle);
         drive_task_handle = NULL;
     }
-    DriveParams* params = new DriveParams{fwd, bwd, speed, duration_ms};
+    DriveParams* params = new DriveParams{fwd, bwd, duration_ms};
     xTaskCreate(drive_timer_task, "drive_timer_task", 2048, params, 5, &drive_task_handle);
 }
 
 // --- C INTERFACE ---
 extern "C" {
     void setup_steering() {
-        // Inisialisasi GPIO Steering
-        gpio_reset_pin(STEER_LEFT_GPIO);
-        gpio_reset_pin(STEER_RIGHT_GPIO);
-        gpio_set_direction(STEER_LEFT_GPIO, GPIO_MODE_OUTPUT);
-        gpio_set_direction(STEER_RIGHT_GPIO, GPIO_MODE_OUTPUT);
-        gpio_set_level(STEER_LEFT_GPIO, 0);
-        gpio_set_level(STEER_RIGHT_GPIO, 0);
-
-        // Inisialisasi LEDC PWM Motor
+        // Configurasi Timer LEDC PWM
         ledc_timer_config_t ledc_timer = {
             .speed_mode       = LEDC_MODE,
             .duty_resolution  = MOTOR_PWM_RESOLUTION,
@@ -136,32 +140,42 @@ extern "C" {
         };
         ledc_timer_config(&ledc_timer);
 
+        // Config Channel Motor FWD
         ledc_channel_config_t ledc_fwd = {
-            .gpio_num       = MOTOR_FORWARD_GPIO,
-            .speed_mode     = LEDC_MODE,
-            .channel        = LEDC_FWD_CHANNEL,
-            .intr_type      = LEDC_INTR_DISABLE,
-            .timer_sel      = LEDC_TIMER,
-            .duty           = 0,
-            .hpoint         = 0
+            .gpio_num = MOTOR_FORWARD_GPIO, .speed_mode = LEDC_MODE,
+            .channel = LEDC_FWD_CHANNEL, .intr_type = LEDC_INTR_DISABLE,
+            .timer_sel = LEDC_TIMER, .duty = 0, .hpoint = 0
         };
         ledc_channel_config(&ledc_fwd);
 
+        // Config Channel Motor BWD
         ledc_channel_config_t ledc_bwd = {
-            .gpio_num       = MOTOR_BACKWARD_GPIO,
-            .speed_mode     = LEDC_MODE,
-            .channel        = LEDC_BWD_CHANNEL,
-            .intr_type      = LEDC_INTR_DISABLE,
-            .timer_sel      = LEDC_TIMER,
-            .duty           = 0,
-            .hpoint         = 0
+            .gpio_num = MOTOR_BACKWARD_GPIO, .speed_mode = LEDC_MODE,
+            .channel = LEDC_BWD_CHANNEL, .intr_type = LEDC_INTR_DISABLE,
+            .timer_sel = LEDC_TIMER, .duty = 0, .hpoint = 0
         };
         ledc_channel_config(&ledc_bwd);
-        
-        ESP_LOGI(RC_TAG, "Inisialisasi GPIO Steering & Motor Selesai");
+
+        // Config Channel Steer LEFT (PWM Soft Steering)
+        ledc_channel_config_t ledc_left = {
+            .gpio_num = STEER_LEFT_GPIO, .speed_mode = LEDC_MODE,
+            .channel = LEDC_LEFT_CHANNEL, .intr_type = LEDC_INTR_DISABLE,
+            .timer_sel = LEDC_TIMER, .duty = 0, .hpoint = 0
+        };
+        ledc_channel_config(&ledc_left);
+
+        // Config Channel Steer RIGHT (PWM Soft Steering)
+        ledc_channel_config_t ledc_right = {
+            .gpio_num = STEER_RIGHT_GPIO, .speed_mode = LEDC_MODE,
+            .channel = LEDC_RIGHT_CHANNEL, .intr_type = LEDC_INTR_DISABLE,
+            .timer_sel = LEDC_TIMER, .duty = 0, .hpoint = 0
+        };
+        ledc_channel_config(&ledc_right);
+
+        ESP_LOGI(RC_TAG, "Inisialisasi PWM Steering & Motor Selesai");
     }
 
-    // --- 1. HANYA BELOK (RODA BELAKANG DIAM) ---
+    // 1. HANYA BELOK RODA DEPAN (SPEED PWM 200, RODA BELAKANG DIAM)
     void hanya_belok_kiri(int duration_ms) {
         trigger_steer(1, 0, duration_ms);
     }
@@ -170,24 +184,24 @@ extern "C" {
         trigger_steer(0, 1, duration_ms);
     }
 
-    // --- 2. BELOK + JALAN (SPEED 200) ---
+    // 2. BELOK + JALAN MAJU (SPEED PWM 200)
     void belok_kiri(int duration_ms) {
         trigger_steer(1, 0, duration_ms);
-        trigger_drive(1, 0, MOTOR_PWM_SPEED, duration_ms);
+        trigger_drive(1, 0, duration_ms);
     }
 
     void belok_kanan(int duration_ms) {
         trigger_steer(0, 1, duration_ms);
-        trigger_drive(1, 0, MOTOR_PWM_SPEED, duration_ms);
+        trigger_drive(1, 0, duration_ms);
     }
 
-    // --- 3. MAJU & MUNDUR LURUS (SPEED 200) ---
+    // 3. MAJU & MUNDUR LURUS (SPEED PWM 200)
     void maju(int duration_ms) {
-        trigger_drive(1, 0, MOTOR_PWM_SPEED, duration_ms);
+        trigger_drive(1, 0, duration_ms);
     }
 
     void mundur(int duration_ms) {
-        trigger_drive(0, 1, MOTOR_PWM_SPEED, duration_ms);
+        trigger_drive(0, 1, duration_ms);
     }
 
     void motor_berhenti() {
@@ -201,25 +215,7 @@ extern "C" {
         ledc_update_duty(LEDC_MODE, LEDC_BWD_CHANNEL);
     }
 }
-
-
-Application::Application() {
-    
-  // 1. Inisialisasi FreeRTOS Event Group
-    event_group_ = xEventGroupCreate();
-
-    // 2. Inisialisasi ESP Timer untuk Clock Status Bar
-    esp_timer_create_args_t clock_timer_args = {
-        .callback = [](void* arg) {
-            // Callback timer periodik
-        },
-        .arg = this,
-        .dispatch_method = ESP_TIMER_TASK,
-        .name = "clock_timer",
-        .skip_unhandled_events = false,
-    };
-    esp_timer_create(&clock_timer_args, &clock_timer_handle_);
-}
+      
 
 Application::~Application() {
     if (clock_timer_handle_ != nullptr) {
