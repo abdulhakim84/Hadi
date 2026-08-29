@@ -28,7 +28,7 @@
 #define MOTOR_BACKWARD_GPIO   GPIO_NUM_14
 
 // --- KECEPATAN STANDAR PWM (0 - 255) ---
-#define PWM_SPEED             200  // Kecepatan standar untuk motor penggerak & steering
+#define PWM_SPEED             220  // Kecepatan standar untuk motor penggerak & steering
 #define MOTOR_PWM_FREQ        5000
 #define MOTOR_PWM_RESOLUTION  LEDC_TIMER_8_BIT
 #define LEDC_MODE             LEDC_LOW_SPEED_MODE
