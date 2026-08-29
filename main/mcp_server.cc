@@ -19,18 +19,11 @@
 #include "lvgl_display.h"
 
 extern "C" {
-    // Inisialisasi Hardware
     void setup_steering();
-
-    // Membelokkan Roda Saja (Tanpa Maju/Mundur)
     void hanya_belok_kiri(int duration_ms);
     void hanya_belok_kanan(int duration_ms);
-
-    // Belok Sambil Jalan (Speed Standar 200)
     void belok_kiri(int duration_ms);
     void belok_kanan(int duration_ms);
-
-    // Kontrol Penggerak Lurus (Speed Standar 200)
     void maju(int duration_ms);
     void mundur(int duration_ms);
     void motor_berhenti();
@@ -139,56 +132,56 @@ void McpServer::AddCommonTools() {
     }
 #endif
 
-   AddTool("self.steer_car",
-            "Control steering direction of the RC car. Supports steering without moving, or turning while driving.",
-            PropertyList({
-                Property("direction", kPropertyTypeString, "Direction: 'kiri' or 'kanan'"),
-                Property("mode", kPropertyTypeString, "Mode: 'tanpa_jalan' (only turn wheel) or 'jalan' (turn while driving)")
-            }),
-            [](const PropertyList& properties) -> ReturnValue {
-                auto direction = properties["direction"].value<std::string>();
-                std::string mode = properties["mode"].value<std::string>();
+ AddTool("self.steer_car",
+        "Control steering direction of the RC car with smooth PWM.",
+        PropertyList({
+            Property("direction", kPropertyTypeString, "Direction: 'kiri' or 'kanan'"),
+            Property("mode", kPropertyTypeString, "Mode: 'tanpa_jalan' (only turn wheel) or 'jalan' (turn while driving)")
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto direction = properties["direction"].value<std::string>();
+            std::string mode = properties["mode"].value<std::string>();
 
-                if (direction == "kiri") {
-                    if (mode == "tanpa_jalan" || mode == "diam") {
-                        hanya_belok_kiri(2000);
-                        return "Hanya membelokkan roda ke kiri (tidak berjalan)";
-                    } else {
-                        belok_kiri(2000);
-                        return "Berhasil belok kiri sambil maju";
-                    }
-                } else if (direction == "kanan") {
-                    if (mode == "tanpa_jalan" || mode == "diam") {
-                        hanya_belok_kanan(2000);
-                        return "Hanya membelokkan roda ke kanan (tidak berjalan)";
-                    } else {
-                        belok_kanan(2000);
-                        return "Berhasil belok kanan sambil maju";
-                    }
+            if (direction == "kiri") {
+                if (mode == "tanpa_jalan" || mode == "diam") {
+                    hanya_belok_kiri(2000);
+                    return "Membelokkan roda depan ke kiri secara halus (roda belakang diam)";
+                } else {
+                    belok_kiri(2000);
+                    return "Belok kiri sambil jalan maju";
                 }
-                return "Arah tidak valid";
-            });
-
-    AddTool("self.drive_car",
-            "Control straight driving movement of the RC car.",
-            PropertyList({
-                Property("action", kPropertyTypeString, "Action: 'maju', 'mundur', or 'berhenti'")
-            }),
-            [](const PropertyList& properties) -> ReturnValue {
-                auto action = properties["action"].value<std::string>();
-
-                if (action == "maju") {
-                    maju(2000);
-                    return "Mobil bergerak maju";
-                } else if (action == "mundur") {
-                    mundur(2000);
-                    return "Mobil bergerak mundur";
-                } else if (action == "berhenti" || action == "stop") {
-                    motor_berhenti();
-                    return "Motor penggerak berhenti";
+            } else if (direction == "kanan") {
+                if (mode == "tanpa_jalan" || mode == "diam") {
+                    hanya_belok_kanan(2000);
+                    return "Membelokkan roda depan ke kanan secara halus (roda belakang diam)";
+                } else {
+                    belok_kanan(2000);
+                    return "Belok kanan sambil jalan maju";
                 }
-                return "Aksi tidak valid";
-            });
+            }
+            return "Arah tidak valid";
+        });
+
+AddTool("self.drive_car",
+        "Control straight driving movement of the RC car.",
+        PropertyList({
+            Property("action", kPropertyTypeString, "Action: 'maju', 'mundur', or 'berhenti'")
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto action = properties["action"].value<std::string>();
+
+            if (action == "maju") {
+                maju(2000);
+                return "Mobil bergerak maju";
+            } else if (action == "mundur") {
+                mundur(2000);
+                return "Mobil bergerak mundur";
+            } else if (action == "berhenti" || action == "stop") {
+                motor_berhenti();
+                return "Motor penggerak berhenti";
+            }
+            return "Aksi tidak valid";
+        });  
 
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), original_tools.begin(), original_tools.end());
