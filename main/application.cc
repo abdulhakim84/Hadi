@@ -215,7 +215,24 @@ extern "C" {
         ledc_update_duty(LEDC_MODE, LEDC_BWD_CHANNEL);
     }
 }
-      
+
+Application::Application() {
+    // 1. Inisialisasi FreeRTOS Event Group
+    event_group_ = xEventGroupCreate();
+
+    // 2. Inisialisasi ESP Timer untuk Clock Status Bar
+    esp_timer_create_args_t clock_timer_args = {
+        .callback = [](void* arg) {
+            // Callback timer periodik
+        },
+        .arg = this,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "clock_timer",
+        .skip_unhandled_events = false,
+    };
+    esp_timer_create(&clock_timer_args, &clock_timer_handle_);
+}
+
 
 Application::~Application() {
     if (clock_timer_handle_ != nullptr) {
