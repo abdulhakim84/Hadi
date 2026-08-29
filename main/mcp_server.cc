@@ -17,6 +17,7 @@
 #include "settings.h"
 #include "lvgl_theme.h"
 #include "lvgl_display.h"
+
 extern "C" {
     // Inisialisasi Hardware
     void setup_steering();
@@ -24,21 +25,17 @@ extern "C" {
     // Membelokkan Roda Saja (Tanpa Maju/Mundur)
     void hanya_belok_kiri(int duration_ms);
     void hanya_belok_kanan(int duration_ms);
-    void roda_lurus();
 
-    // Belok Sambil Jalan
-    void belok_kiri_pelan(int duration_ms);
-    void belok_kanan_pelan(int duration_ms);
-    void belok_kiri_cepat(int duration_ms);
-    void belok_kanan_cepat(int duration_ms);
+    // Belok Sambil Jalan (Speed Standar 200)
+    void belok_kiri(int duration_ms);
+    void belok_kanan(int duration_ms);
 
-    // Kontrol Penggerak Lurus
-    void maju_pelan(int duration_ms);
-    void mundur_pelan(int duration_ms);
-    void maju_cepat(int duration_ms);
-    void mundur_cepat(int duration_ms);
+    // Kontrol Penggerak Lurus (Speed Standar 200)
+    void maju(int duration_ms);
+    void mundur(int duration_ms);
     void motor_berhenti();
 }
+
 #define TAG "MCP"
 
 McpServer::McpServer() {
@@ -141,79 +138,51 @@ void McpServer::AddCommonTools() {
             });
     }
 #endif
-  AddTool("self.steer_car",
-            "Control steering direction of the RC car. Supports steering without moving, or turning while driving (slow or fast).",
+
+   AddTool("self.steer_car",
+            "Control steering direction of the RC car. Supports steering without moving, or turning while driving.",
             PropertyList({
-                Property("direction", kPropertyTypeString, "Direction: 'kiri', 'kanan', or 'lurus'"),
-                Property("mode", kPropertyTypeString, "Mode: 'tanpa_jalan' (only turn wheel), 'pelan' (turn while drive slow), or 'cepat' (turn while drive fast)")
+                Property("direction", kPropertyTypeString, "Direction: 'kiri' or 'kanan'"),
+                Property("mode", kPropertyTypeString, "Mode: 'tanpa_jalan' (only turn wheel) or 'jalan' (turn while driving)")
             }),
             [](const PropertyList& properties) -> ReturnValue {
                 auto direction = properties["direction"].value<std::string>();
                 std::string mode = properties["mode"].value<std::string>();
-                if (mode.empty()) {
-                    mode = "pelan";
-                }
 
                 if (direction == "kiri") {
                     if (mode == "tanpa_jalan" || mode == "diam") {
                         hanya_belok_kiri(2000);
                         return "Hanya membelokkan roda ke kiri (tidak berjalan)";
-                    } else if (mode == "cepat") {
-                        belok_kiri_cepat(2000);
-                        return "Berhasil belok kiri sambil maju cepat";
                     } else {
-                        belok_kiri_pelan(2000);
-                        return "Berhasil belok kiri sambil maju pelan";
+                        belok_kiri(2000);
+                        return "Berhasil belok kiri sambil maju";
                     }
                 } else if (direction == "kanan") {
                     if (mode == "tanpa_jalan" || mode == "diam") {
                         hanya_belok_kanan(2000);
                         return "Hanya membelokkan roda ke kanan (tidak berjalan)";
-                    } else if (mode == "cepat") {
-                        belok_kanan_cepat(2000);
-                        return "Berhasil belok kanan sambil maju cepat";
                     } else {
-                        belok_kanan_pelan(2000);
-                        return "Berhasil belok kanan sambil maju pelan";
+                        belok_kanan(2000);
+                        return "Berhasil belok kanan sambil maju";
                     }
-                } else if (direction == "lurus") {
-                    roda_lurus();
-                    return "Roda kembali lurus";
                 }
                 return "Arah tidak valid";
             });
 
     AddTool("self.drive_car",
-            "Control straight driving movement of the RC car with speed control (slow or fast).",
+            "Control straight driving movement of the RC car.",
             PropertyList({
-                Property("action", kPropertyTypeString, "Action: 'maju_pelan', 'maju_cepat', 'mundur_pelan', 'mundur_cepat', 'maju', 'mundur', or 'berhenti'"),
-                Property("speed", kPropertyTypeString, "Optional speed modifier: 'pelan' or 'cepat'")
+                Property("action", kPropertyTypeString, "Action: 'maju', 'mundur', or 'berhenti'")
             }),
             [](const PropertyList& properties) -> ReturnValue {
                 auto action = properties["action"].value<std::string>();
-                std::string speed = properties["speed"].value<std::string>();
-                if (speed.empty()) {
-                    speed = "pelan";
-                }
 
-                if (action == "maju_pelan" || (action == "maju" && speed == "pelan")) {
-                    maju_pelan(2000);
-                    return "Mobil bergerak maju pelan";
-                } else if (action == "maju_cepat" || (action == "maju" && speed == "cepat")) {
-                    maju_cepat(2000);
-                    return "Mobil bergerak maju cepat";
-                } else if (action == "mundur_pelan" || (action == "mundur" && speed == "pelan")) {
-                    mundur_pelan(2000);
-                    return "Mobil bergerak mundur pelan";
-                } else if (action == "mundur_cepat" || (action == "mundur" && speed == "cepat")) {
-                    mundur_cepat(2000);
-                    return "Mobil bergerak mundur cepat";
-                } else if (action == "maju") {
-                    maju_pelan(2000);
-                    return "Mobil bergerak maju pelan";
+                if (action == "maju") {
+                    maju(2000);
+                    return "Mobil bergerak maju";
                 } else if (action == "mundur") {
-                    mundur_pelan(2000);
-                    return "Mobil bergerak mundur pelan";
+                    mundur(2000);
+                    return "Mobil bergerak mundur";
                 } else if (action == "berhenti" || action == "stop") {
                     motor_berhenti();
                     return "Motor penggerak berhenti";
@@ -223,7 +192,7 @@ void McpServer::AddCommonTools() {
 
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), original_tools.begin(), original_tools.end());
-}
+}             
 
 void McpServer::AddUserOnlyTools() {
     // System tools
