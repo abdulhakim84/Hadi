@@ -26,11 +26,9 @@
 #define STEER_RIGHT_GPIO      GPIO_NUM_12
 #define MOTOR_FORWARD_GPIO    GPIO_NUM_13
 #define MOTOR_BACKWARD_GPIO   GPIO_NUM_14
-#define STEER_CENTER_PULSE_MS 250
 
-// --- PENGATURAN KECEPATAN MOTOR ---
-#define MOTOR_PWM_SLOW        200  // Kecepatan pelan (0 - 255)
-#define MOTOR_PWM_FAST        255  // Kecepatan cepat (0 - 255)
+// --- PENGATURAN KECEPATAN STANDAR ---
+#define MOTOR_PWM_SPEED       200  // Kecepatan standar
 #define MOTOR_PWM_FREQ        5000
 #define MOTOR_PWM_RESOLUTION  LEDC_TIMER_8_BIT
 #define LEDC_MODE             LEDC_LOW_SPEED_MODE
@@ -40,11 +38,8 @@
 
 #define RC_TAG "RC_CONTROL"
 
-typedef enum { STEER_CENTER, STEER_LEFT, STEER_RIGHT } SteerState;
-
 static TaskHandle_t steer_task_handle = NULL;
 static TaskHandle_t drive_task_handle = NULL;
-static SteerState current_steer_state = STEER_CENTER;
 
 struct SteerParams {
     int left_level;
@@ -65,24 +60,12 @@ void steer_timer_task(void* pvParameters) {
     
     gpio_set_level(STEER_LEFT_GPIO, params->left_level);
     gpio_set_level(STEER_RIGHT_GPIO, params->right_level);
-    current_steer_state = params->left_level ? STEER_LEFT : STEER_RIGHT;
 
     vTaskDelay(pdMS_TO_TICKS(params->duration_ms));
 
-    // Active Centering (Kembalikan ke tengah tanpa pegas)
-    if (current_steer_state == STEER_LEFT) {
-        gpio_set_level(STEER_LEFT_GPIO, 0);
-        gpio_set_level(STEER_RIGHT_GPIO, 1);
-        vTaskDelay(pdMS_TO_TICKS(STEER_CENTER_PULSE_MS));
-    } else if (current_steer_state == STEER_RIGHT) {
-        gpio_set_level(STEER_RIGHT_GPIO, 0);
-        gpio_set_level(STEER_LEFT_GPIO, 1);
-        vTaskDelay(pdMS_TO_TICKS(STEER_CENTER_PULSE_MS));
-    }
-
+    // Matikan sinyal ke motor belok tanpa membalikkan posisi (tanpa active centering)
     gpio_set_level(STEER_LEFT_GPIO, 0);
     gpio_set_level(STEER_RIGHT_GPIO, 0);
-    current_steer_state = STEER_CENTER;
 
     delete params;
     steer_task_handle = NULL;
@@ -175,11 +158,10 @@ extern "C" {
         };
         ledc_channel_config(&ledc_bwd);
         
-        current_steer_state = STEER_CENTER;
         ESP_LOGI(RC_TAG, "Inisialisasi GPIO Steering & Motor Selesai");
     }
 
-    // --- HANYA MEMBELOKKAN RODA (TANPA BERJALAN) ---
+    // --- 1. HANYA BELOK (RODA BELAKANG DIAM) ---
     void hanya_belok_kiri(int duration_ms) {
         trigger_steer(1, 0, duration_ms);
     }
@@ -188,61 +170,24 @@ extern "C" {
         trigger_steer(0, 1, duration_ms);
     }
 
-    void roda_lurus() {
-        if (steer_task_handle != NULL) {
-            vTaskDelete(steer_task_handle);
-            steer_task_handle = NULL;
-        }
-        if (current_steer_state == STEER_LEFT) {
-            gpio_set_level(STEER_LEFT_GPIO, 0);
-            gpio_set_level(STEER_RIGHT_GPIO, 1);
-            vTaskDelay(pdMS_TO_TICKS(STEER_CENTER_PULSE_MS));
-        } else if (current_steer_state == STEER_RIGHT) {
-            gpio_set_level(STEER_RIGHT_GPIO, 0);
-            gpio_set_level(STEER_LEFT_GPIO, 1);
-            vTaskDelay(pdMS_TO_TICKS(STEER_CENTER_PULSE_MS));
-        }
-        gpio_set_level(STEER_LEFT_GPIO, 0);
-        gpio_set_level(STEER_RIGHT_GPIO, 0);
-        current_steer_state = STEER_CENTER;
-    }
-
-    // --- BELOK SAMBIL BERJALAN ---
-    void belok_kiri_pelan(int duration_ms) {
+    // --- 2. BELOK + JALAN (SPEED 200) ---
+    void belok_kiri(int duration_ms) {
         trigger_steer(1, 0, duration_ms);
-        trigger_drive(1, 0, MOTOR_PWM_SLOW, duration_ms);
+        trigger_drive(1, 0, MOTOR_PWM_SPEED, duration_ms);
     }
 
-    void belok_kanan_pelan(int duration_ms) {
+    void belok_kanan(int duration_ms) {
         trigger_steer(0, 1, duration_ms);
-        trigger_drive(1, 0, MOTOR_PWM_SLOW, duration_ms);
+        trigger_drive(1, 0, MOTOR_PWM_SPEED, duration_ms);
     }
 
-    void belok_kiri_cepat(int duration_ms) {
-        trigger_steer(1, 0, duration_ms);
-        trigger_drive(1, 0, MOTOR_PWM_FAST, duration_ms);
+    // --- 3. MAJU & MUNDUR LURUS (SPEED 200) ---
+    void maju(int duration_ms) {
+        trigger_drive(1, 0, MOTOR_PWM_SPEED, duration_ms);
     }
 
-    void belok_kanan_cepat(int duration_ms) {
-        trigger_steer(0, 1, duration_ms);
-        trigger_drive(1, 0, MOTOR_PWM_FAST, duration_ms);
-    }
-
-    // --- KONTROL PENGGERAK LURUS ---
-    void maju_pelan(int duration_ms) {
-        trigger_drive(1, 0, MOTOR_PWM_SLOW, duration_ms);
-    }
-
-    void mundur_pelan(int duration_ms) {
-        trigger_drive(0, 1, MOTOR_PWM_SLOW, duration_ms);
-    }
-
-    void maju_cepat(int duration_ms) {
-        trigger_drive(1, 0, MOTOR_PWM_FAST, duration_ms);
-    }
-
-    void mundur_cepat(int duration_ms) {
-        trigger_drive(0, 1, MOTOR_PWM_FAST, duration_ms);
+    void mundur(int duration_ms) {
+        trigger_drive(0, 1, MOTOR_PWM_SPEED, duration_ms);
     }
 
     void motor_berhenti() {
@@ -256,6 +201,7 @@ extern "C" {
         ledc_update_duty(LEDC_MODE, LEDC_BWD_CHANNEL);
     }
 }
+
 
 Application::Application() {
     
