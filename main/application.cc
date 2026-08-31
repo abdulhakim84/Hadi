@@ -28,7 +28,8 @@
 #define MOTOR_BACKWARD_GPIO   GPIO_NUM_14
 
 // --- KECEPATAN STANDAR PWM (0 - 255) ---
-#define PWM_SPEED             220  // Kecepatan standar untuk motor penggerak & steering
+#define DRIVE_PWM_SPEED 220  // Speed motor belakang
+#define STEER_PWM_SPEED 255  // Speed dinamo depan (dibuat lebih tinggi untuk melawan pegas)
 #define MOTOR_PWM_FREQ        5000
 #define MOTOR_PWM_RESOLUTION  LEDC_TIMER_8_BIT
 #define LEDC_MODE             LEDC_LOW_SPEED_MODE
@@ -57,14 +58,14 @@ struct DriveParams {
     int duration_ms;
 };
 
-// --- TASK KEMUDI (PWM SOFT STEERING) ---
+// --- TASK KEMUDI (POWER DEPAN LEBIH BESAR) ---
 void steer_timer_task(void* pvParameters) {
     SteerParams* params = (SteerParams*)pvParameters;
     
-    uint32_t left_duty  = params->left_enable  ? PWM_SPEED : 0;
-    uint32_t right_duty = params->right_enable ? PWM_SPEED : 0;
+    // Gunakan STEER_PWM_SPEED (255)
+    uint32_t left_duty  = params->left_enable  ? STEER_PWM_SPEED : 0;
+    uint32_t right_duty = params->right_enable ? STEER_PWM_SPEED : 0;
 
-    // Gerakkan dinamo belok secara halus dengan PWM speed 200
     ledc_set_duty(LEDC_MODE, LEDC_LEFT_CHANNEL, left_duty);
     ledc_update_duty(LEDC_MODE, LEDC_LEFT_CHANNEL);
 
@@ -73,7 +74,7 @@ void steer_timer_task(void* pvParameters) {
 
     vTaskDelay(pdMS_TO_TICKS(params->duration_ms));
 
-    // Matikan arus dinamo belok (tanpa ada gerakan membalikkan roda)
+    // Matikan arus dinamo belok
     ledc_set_duty(LEDC_MODE, LEDC_LEFT_CHANNEL, 0);
     ledc_update_duty(LEDC_MODE, LEDC_LEFT_CHANNEL);
     ledc_set_duty(LEDC_MODE, LEDC_RIGHT_CHANNEL, 0);
@@ -93,12 +94,13 @@ void trigger_steer(int left, int right, int duration_ms) {
     xTaskCreate(steer_timer_task, "steer_timer_task", 2048, params, 5, &steer_task_handle);
 }
 
-// --- TASK MOTOR PENGGERAK ---
+// --- TASK MOTOR PENGGERAK (POWER BELAKANG 220) ---
 void drive_timer_task(void* pvParameters) {
     DriveParams* params = (DriveParams*)pvParameters;
     
-    uint32_t fwd_duty = params->fwd_enable ? PWM_SPEED : 0;
-    uint32_t bwd_duty = params->bwd_enable ? PWM_SPEED : 0;
+    // Gunakan DRIVE_PWM_SPEED (220)
+    uint32_t fwd_duty = params->fwd_enable ? DRIVE_PWM_SPEED : 0;
+    uint32_t bwd_duty = params->bwd_enable ? DRIVE_PWM_SPEED : 0;
 
     ledc_set_duty(LEDC_MODE, LEDC_FWD_CHANNEL, fwd_duty);
     ledc_update_duty(LEDC_MODE, LEDC_FWD_CHANNEL);
@@ -130,7 +132,7 @@ void trigger_drive(int fwd, int bwd, int duration_ms) {
 // --- C INTERFACE ---
 extern "C" {
     void setup_steering() {
-        // Configurasi Timer LEDC PWM
+        // Konfigurasi Timer LEDC PWM
         ledc_timer_config_t ledc_timer = {
             .speed_mode       = LEDC_MODE,
             .duty_resolution  = MOTOR_PWM_RESOLUTION,
@@ -175,7 +177,7 @@ extern "C" {
         ESP_LOGI(RC_TAG, "Inisialisasi PWM Steering & Motor Selesai");
     }
 
-    // 1. HANYA BELOK RODA DEPAN (SPEED PWM 200, RODA BELAKANG DIAM)
+    // 1. HANYA BELOK RODA DEPAN
     void hanya_belok_kiri(int duration_ms) {
         trigger_steer(1, 0, duration_ms);
     }
@@ -184,7 +186,7 @@ extern "C" {
         trigger_steer(0, 1, duration_ms);
     }
 
-    // 2. BELOK + JALAN MAJU (SPEED PWM 200)
+    // 2. BELOK + JALAN MAJU
     void belok_kiri(int duration_ms) {
         trigger_steer(1, 0, duration_ms);
         trigger_drive(1, 0, duration_ms);
@@ -195,7 +197,7 @@ extern "C" {
         trigger_drive(1, 0, duration_ms);
     }
 
-    // 3. MAJU & MUNDUR LURUS (SPEED PWM 200)
+    // 3. MAJU & MUNDUR LURUS
     void maju(int duration_ms) {
         trigger_drive(1, 0, duration_ms);
     }
@@ -215,6 +217,7 @@ extern "C" {
         ledc_update_duty(LEDC_MODE, LEDC_BWD_CHANNEL);
     }
 }
+
 
 Application::Application() {
     // 1. Inisialisasi FreeRTOS Event Group
