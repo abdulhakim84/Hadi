@@ -10,6 +10,7 @@
 #include "system_info.h"
 #include "text_glyph_payload.h"
 #include "websocket_protocol.h"
+#include "web_server.h"
 
 #include <driver/gpio.h>
 #include "freertos/FreeRTOS.h"
@@ -324,9 +325,11 @@ void Application::Initialize() {
                 break;
             case NetworkEvent::WifiConfigModeEnter:
                 // WiFi config mode enter is handled by WifiBoard internally
+                WebServer::GetInstance().Start();
                 break;
             case NetworkEvent::WifiConfigModeExit:
                 // WiFi config mode exit is handled by WifiBoard internally
+                WebServer::GetInstance().Stop();
                 break;
             // Cellular modem specific events
             case NetworkEvent::ModemDetecting:
