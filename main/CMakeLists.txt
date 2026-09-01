@@ -1086,6 +1086,7 @@ idf_component_register(SRCS ${SOURCES}
                         bt
                         fatfs
                         xiaozhi-fonts
+                        nvs_flash
                         ${MAIN_PRIV_REQUIRES_EXTRA}
                     )
 
