@@ -29,7 +29,7 @@
 #define MOTOR_BACKWARD_GPIO   GPIO_NUM_14
 
 // --- KECEPATAN STANDAR PWM (0 - 255) ---
-#define DRIVE_PWM_SPEED 220  // Speed motor belakang
+#define DRIVE_PWM_SPEED 255  // Speed motor belakang
 #define STEER_PWM_SPEED 255  // Speed dinamo depan (dibuat lebih tinggi untuk melawan pegas)
 #define MOTOR_PWM_FREQ        5000
 #define MOTOR_PWM_RESOLUTION  LEDC_TIMER_8_BIT
