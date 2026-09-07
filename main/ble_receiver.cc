@@ -11,8 +11,17 @@ void BleReceiver::OnReset(int reason) {
 
 void BleReceiver::OnSync() {
     ESP_LOGI(TAG, "BLE Host synced, siap digunakan.");
-    ble_hs_id_infer_auto(0, NULL);
+
+    uint8_t own_addr_type;
+    int rc = ble_hs_id_infer_auto(0, &own_addr_type);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "Gagal menentukan own_addr_type: %d", rc);
+        return;
+    }
+
+    ESP_LOGI(TAG, "BLE Address Type: %d", own_addr_type);
 }
+
 
 void BleReceiver::HostTask(void *param) {
     ESP_LOGI(TAG, "BLE Host Task Started");
