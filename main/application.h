@@ -17,6 +17,7 @@
 #include "audio_service.h"
 #include "device_state.h"
 #include "device_state_machine.h"
+#include "ble_receiver.h"
 
 // Main event bits
 #define MAIN_EVENT_SCHEDULE             (1 << 0)
@@ -123,6 +124,11 @@ public:
      */
     void ResetProtocol();
 
+    /**
+     * Handler untuk menerima perintah dari BLE Remote (ESP32-C3)
+     */
+    void HandleRemoteCommand(char command);
+
 private:
     Application();
     ~Application();
@@ -139,6 +145,8 @@ private:
     AudioService audio_service_;
     std::unique_ptr<Ota> ota_;
 
+    BleReceiver ble_receiver_; // Instansi BLE Receiver
+
     std::function<void(const std::string&)> mcp_broadcast_callback_;
 
     bool has_server_time_ = false;
@@ -149,7 +157,6 @@ private:
     int clock_ticks_ = 0;
     TaskHandle_t activation_task_handle_ = nullptr;
 
-
     // Event handlers
     void HandleStateChangedEvent();
     void HandleToggleChatEvent();
@@ -159,6 +166,7 @@ private:
     void HandleNetworkDisconnectedEvent();
     void HandleActivationDoneEvent();
     void HandleWakeWordDetectedEvent();
+
     void ContinueOpenAudioChannel(ListeningMode mode);
     void BeginWakeWordInvoke(const std::string& wake_word);
     void ContinueWakeWordInvoke(const std::string& wake_word);
@@ -179,7 +187,6 @@ private:
     // State change handler called by state machine
     void OnStateChanged(DeviceState old_state, DeviceState new_state);
 };
-
 
 class TaskPriorityReset {
 public:
