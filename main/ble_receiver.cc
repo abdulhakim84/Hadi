@@ -1,46 +1,53 @@
 #include "ble_receiver.h"
-#include "application.h"
-#include <esp_log.h>
+#include "esp_log.h"
 
-#define SERVICE_UUID        "12345678-1234-1234-1234-123456789abc"
-#define CHARACTERISTIC_UUID "abcdefab-1234-1234-1234-123456789abc"
-
-static const char* TAG = "BleReceiver";
-
-// Callback saat ada data ditulis dari ESP32-C3 Remote
-class RemoteCallbacks : public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic* pCharacteristic) override {
-        std::string value = pCharacteristic->getValue();
-        if (!value.empty()) {
-            char command = value[0];
-            ESP_LOGI(TAG, "Terima Perintah Remote: %c", command);
-            
-            // Oper perintah langsung ke Application
-            Application::GetInstance().HandleRemoteCommand(command);
-        }
-    }
-};
+static const char *TAG = "BLE_RECEIVER";
 
 BleReceiver::BleReceiver() {}
 
+void BleReceiver::OnReset(int reason) {
+    ESP_LOGI(TAG, "BLE Resetting state; reason=%d", reason);
+}
+
+void BleReceiver::OnSync() {
+    ESP_LOGI(TAG, "BLE Host synced, siap digunakan.");
+    ble_hs_id_infer_auto(0, NULL);
+}
+
+void BleReceiver::HostTask(void *param) {
+    ESP_LOGI(TAG, "BLE Host Task Started");
+    nimble_port_run();
+    nimble_port_freertos_deinit();
+}
+
+int BleReceiver::GapEventHandler(struct ble_gap_event *event, void *arg) {
+    switch (event->type) {
+        case BLE_GAP_EVENT_CONNECT:
+            ESP_LOGI(TAG, "BLE Connected, status=%d", event->connect.status);
+            break;
+        case BLE_GAP_EVENT_DISCONNECT:
+            ESP_LOGI(TAG, "BLE Disconnected, reason=%d", event->disconnect.reason);
+            break;
+        default:
+            break;
+    }
+    return 0;
+}
+
 void BleReceiver::Init() {
-    BLEDevice::init("ESP32S3-ROBOT");
-    pServer = BLEDevice::createServer();
+    int rc = nimble_port_init();
+    if (rc != 0) {
+        ESP_LOGE(TAG, "Gagal menginisialisasi NimBLE: %d", rc);
+        return;
+    }
 
-    pService = pServer->createService(SERVICE_UUID);
-    pCharacteristic = pService->createCharacteristic(
-        CHARACTERISTIC_UUID,
-        BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR
-    );
+    ble_hs_cfg.reset_cb = OnReset;
+    ble_hs_cfg.sync_cb = OnSync;
 
-    pCharacteristic->setCallbacks(new RemoteCallbacks());
-    pService->start();
+    ble_svc_gap_init();
+    ble_svc_gatt_init();
 
-    // Mulai Advertising agar ESP32-C3 bisa menemukan ESP32-S3
-    BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
-    pAdvertising->addServiceUUID(SERVICE_UUID);
-    pAdvertising->setScanResponse(true);
-    BLEDevice::startAdvertising();
+    ble_svc_gap_device_name_set("Xiaozhi-BLE");
 
-    ESP_LOGI(TAG, "BLE Receiver siap & advertising...");
+    nimble_port_freertos_init(HostTask);
 }
