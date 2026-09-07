@@ -11,6 +11,7 @@
 #include "text_glyph_payload.h"
 #include "websocket_protocol.h"
 #include "web_server.h"
+#include "ble_receiver.h"
 
 #include <driver/gpio.h>
 #include "freertos/FreeRTOS.h"
@@ -252,6 +253,7 @@ void Application::Initialize() {
     auto& board = Board::GetInstance();
     SetDeviceState(kDeviceStateStarting);
     setup_steering();
+    ble_receiver_.Init();
     // Setup the display
     auto display = board.GetDisplay();
     display->SetupUI();
@@ -359,6 +361,33 @@ void Application::Initialize() {
     // Update the status bar immediately to show the network state
     display->UpdateStatusBar(true);
 }
+void Application::HandleRemoteCommand(char command) {
+    // Gunakan Schedule() bawaan Application agar aman dipanggil dari callback BLE task
+    Schedule([this, command]() {
+        ESP_LOGI("Application", "Menerima Perintah Remote: %c", command);
+
+        switch (command) {
+            case 'F':
+                // Panggil objek dinamo/motor Anda di sini
+                // contoh: dinamo_.Maju();
+                break;
+            case 'B':
+                // contoh: dinamo_.Mundur();
+                break;
+            case 'L':
+                // contoh: dinamo_.BelokKiri();
+                break;
+            case 'R':
+                // contoh: dinamo_.BelokKanan();
+                break;
+            case 'S':
+            default:
+                // contoh: dinamo_.Stop();
+                break;
+        }
+    });
+}
+
 
 void Application::Run() {
     // Set the priority of the main task to 10
