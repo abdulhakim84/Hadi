@@ -8,6 +8,16 @@ BleReceiver::BleReceiver() {}
 void BleReceiver::OnReset(int reason) {
     ESP_LOGI(TAG, "BLE Resetting state; reason=%d", reason);
 }
+void BleReceiver::StartAdvertising() {
+    struct ble_gap_adv_params adv_params;
+    memset(&adv_params, 0, sizeof(adv_params));
+    adv_params.conn_mode = BLE_GAP_CONN_MODE_UND; // Dapat dihubungkan (Connectable)
+    adv_params.disc_mode = BLE_GAP_DISC_MODE_GEN; // Dapat ditemukan (Discoverable)
+
+    // Mulai menyiarkan nama "Xiaozhi-BLE"
+    ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, NULL, BLE_HS_FOREVER, &adv_params, GapEventHandler, NULL);
+    ESP_LOGI(TAG, "Mulai menyiarkan BLE Advertising...");
+}
 
 void BleReceiver::OnSync() {
     ESP_LOGI(TAG, "BLE Host synced, siap digunakan.");
@@ -20,6 +30,7 @@ void BleReceiver::OnSync() {
     }
 
     ESP_LOGI(TAG, "BLE Address Type: %d", own_addr_type);
+    StartAdvertising(); 
 }
 
 
