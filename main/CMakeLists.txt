@@ -44,7 +44,10 @@ set(SOURCES "audio/audio_codec.cc"
             "ble_receiver.cc"
             )
 
-set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols")
+set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols" PRIV_REQUIRES
+        bt
+        NimBLE-Arduino 
+        )
 
 # Add board common files
 list(APPEND SOURCES
