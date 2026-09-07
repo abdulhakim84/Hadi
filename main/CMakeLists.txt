@@ -1092,7 +1092,7 @@ idf_component_register(SRCS ${SOURCES}
                         nvs_flash
                         esp-wifi-connect
                         ${MAIN_PRIV_REQUIRES_EXTRA}
-                        bt NimBLE-Arduino
+            
                     )
 
 # Use target_compile_definitions to define the reported board identity
