@@ -14,11 +14,13 @@ public:
     BleReceiver();
     void Init();
     static void StartAdvertising();
+    
+    // Dipindahkan ke public agar bisa diakses oleh tabel struct gatt_svcs
+    static int GattAccessCallback(uint16_t conn_handle, uint16_t attr_handle,
+                                   struct ble_gatt_access_ctxt *ctxt, void *arg);
 
 private:
     static int GapEventHandler(struct ble_gap_event *event, void *arg);
-    static int GattAccessCallback(uint16_t conn_handle, uint16_t attr_handle,
-                                   struct ble_gatt_access_ctxt *ctxt, void *arg);
     static void HostTask(void *param);
     static void OnReset(int reason);
     static void OnSync();
