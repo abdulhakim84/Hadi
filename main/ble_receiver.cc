@@ -3,6 +3,7 @@
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
 #include "host/ble_hs.h"
+#include "host/util/util.h" // Header untuk ble_hs_util_ensure_addr
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 #include <string.h>
@@ -10,7 +11,7 @@
 static const char *TAG = "BLE_RECEIVER";
 static uint8_t own_addr_type;
 
-// UUID Service & Characteristic (Little-Endian)
+// UUID Service & Characteristic (Little-Endian Format)
 static const ble_uuid128_t gatt_service_uuid =
     BLE_UUID128_INIT(0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12, 0x34, 0x12, 0x34, 0x12, 0x34, 0x12, 0x78, 0x56, 0x34, 0x12);
 
@@ -102,7 +103,6 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg) {
 }
 
 static void on_sync(void) {
-    // Memastikan MAC Address valid sebelum mengaktifkan stack
     int rc = ble_hs_util_ensure_addr(0);
     if (rc != 0) {
         ESP_LOGE(TAG, "Gagal ensure_addr: %d", rc);
