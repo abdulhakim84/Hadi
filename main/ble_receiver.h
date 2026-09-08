@@ -13,6 +13,7 @@ class BleReceiver {
 public:
     BleReceiver();
     void Init();
+    static void StartAdvertising();
 
 private:
     uint16_t conn_handle = BLE_HS_CONN_HANDLE_NONE;
