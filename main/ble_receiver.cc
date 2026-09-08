@@ -116,10 +116,10 @@ static int gatt_access_cb(uint16_t conn_handle, uint16_t attr_handle,
                         mundur(2000);
                         break;
                     case 'L':
-                        belok_kiri(2000);
+                        hanya_belok_kiri(2000);
                         break;
                     case 'R':
-                        belok_kanan(2000);
+                        hanya_belok_kanan(2000);
                         break;
                     case 'S':
                         motor_berhenti();
