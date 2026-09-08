@@ -1,4 +1,5 @@
 #include "ble_receiver.h"
+#include "application.h"
 #include "esp_log.h"
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
@@ -11,10 +12,22 @@
 static const char *TAG = "BLE_RECEIVER";
 static uint8_t own_addr_type;
 
-// UUID Service & Characteristic (Little-Endian Format)
+// Deklarasi fungsi kontrol motor bawaan dari application.cc
+extern "C" {
+    void maju(int duration_ms);
+    void mundur(int duration_ms);
+    void belok_kiri(int duration_ms);
+    void belok_kanan(int duration_ms);
+    void hanya_belok_kiri(int duration_ms);
+    void hanya_belok_kanan(int duration_ms);
+    void motor_berhenti();
+}
+
+// UUID Service: 12345678-1234-1234-1234-123456789abc (Format Little-Endian)
 static const ble_uuid128_t gatt_service_uuid =
     BLE_UUID128_INIT(0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12, 0x34, 0x12, 0x34, 0x12, 0x34, 0x12, 0x78, 0x56, 0x34, 0x12);
 
+// UUID Characteristic: abcdefab-1234-1234-1234-123456789abc (Format Little-Endian)
 static const ble_uuid128_t gatt_char_uuid =
     BLE_UUID128_INIT(0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12, 0x34, 0x12, 0x34, 0x12, 0x34, 0x12, 0xab, 0xef, 0xcd, 0xab);
 
@@ -43,7 +56,7 @@ static void start_advertising(void) {
     struct ble_hs_adv_fields adv_fields;
     memset(&adv_fields, 0, sizeof(adv_fields));
 
-    // 1. Paket Advertising Utama (UUID Service)
+    // 1. Paket Utama Advertising (Service UUID)
     adv_fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
     adv_fields.uuids128 = (ble_uuid128_t*)&gatt_service_uuid;
     adv_fields.num_uuids128 = 1;
@@ -55,7 +68,7 @@ static void start_advertising(void) {
         return;
     }
 
-    // 2. Scan Response Data (Nama Perangkat dipisah ke sini agar paket tidak lebih dari 31 byte)
+    // 2. Scan Response Data (Nama Perangkat)
     struct ble_hs_adv_fields rsp_fields;
     memset(&rsp_fields, 0, sizeof(rsp_fields));
 
@@ -70,7 +83,7 @@ static void start_advertising(void) {
         return;
     }
 
-    // 3. Jalankan Advertising
+    // 3. Mulai Broadcast
     struct ble_gap_adv_params adv_params;
     memset(&adv_params, 0, sizeof(adv_params));
     adv_params.conn_mode = BLE_GAP_CONN_MODE_UND;
@@ -91,7 +104,30 @@ static int gatt_access_cb(uint16_t conn_handle, uint16_t attr_handle,
         if (len > 0) {
             char command = 0;
             os_mbuf_copydata(ctxt->om, 0, 1, &command);
-            ESP_LOGI(TAG, "PERINTAH REMOTE: [%c]", command);
+            ESP_LOGI(TAG, "PERINTAH REMOTE TERIMA: [%c]", command);
+
+            // Oper eksekusi motor ke main thread Application Xiaozhi
+            Application::GetInstance().Schedule([command]() {
+                switch (command) {
+                    case 'F':
+                        maju(2000);
+                        break;
+                    case 'B':
+                        mundur(2000);
+                        break;
+                    case 'L':
+                        belok_kiri(2000);
+                        break;
+                    case 'R':
+                        belok_kanan(2000);
+                        break;
+                    case 'S':
+                        motor_berhenti();
+                        break;
+                    default:
+                        break;
+                }
+            });
         }
     }
     return 0;
