@@ -3,7 +3,7 @@
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
 #include "host/ble_hs.h"
-#include "host/util/util.h" // Header untuk ble_hs_util_ensure_addr
+#include "host/util/util.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 #include <string.h>
@@ -40,24 +40,37 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
 static int gap_event_cb(struct ble_gap_event *event, void *arg);
 
 static void start_advertising(void) {
-    struct ble_hs_adv_fields fields;
-    memset(&fields, 0, sizeof(fields));
+    struct ble_hs_adv_fields adv_fields;
+    memset(&adv_fields, 0, sizeof(adv_fields));
 
-    fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
-    fields.name = (uint8_t *)"ESP32-S3-RECEIVER";
-    fields.name_len = strlen("ESP32-S3-RECEIVER");
-    fields.name_is_complete = 1;
+    // 1. Paket Advertising Utama (UUID Service)
+    adv_fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
+    adv_fields.uuids128 = (ble_uuid128_t*)&gatt_service_uuid;
+    adv_fields.num_uuids128 = 1;
+    adv_fields.uuids128_is_complete = 1;
 
-    fields.uuids128 = (ble_uuid128_t*)&gatt_service_uuid;
-    fields.num_uuids128 = 1;
-    fields.uuids128_is_complete = 1;
-
-    int rc = ble_gap_adv_set_fields(&fields);
+    int rc = ble_gap_adv_set_fields(&adv_fields);
     if (rc != 0) {
-        ESP_LOGE(TAG, "Gagal set fields advertising: %d", rc);
+        ESP_LOGE(TAG, "Gagal set adv_fields: %d", rc);
         return;
     }
 
+    // 2. Scan Response Data (Nama Perangkat dipisah ke sini agar paket tidak lebih dari 31 byte)
+    struct ble_hs_adv_fields rsp_fields;
+    memset(&rsp_fields, 0, sizeof(rsp_fields));
+
+    const char *name = "ESP32-S3-RECEIVER";
+    rsp_fields.name = (uint8_t *)name;
+    rsp_fields.name_len = strlen(name);
+    rsp_fields.name_is_complete = 1;
+
+    rc = ble_gap_adv_rsp_set_fields(&rsp_fields);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "Gagal set rsp_fields: %d", rc);
+        return;
+    }
+
+    // 3. Jalankan Advertising
     struct ble_gap_adv_params adv_params;
     memset(&adv_params, 0, sizeof(adv_params));
     adv_params.conn_mode = BLE_GAP_CONN_MODE_UND;
@@ -65,10 +78,10 @@ static void start_advertising(void) {
 
     rc = ble_gap_adv_start(own_addr_type, NULL, BLE_HS_FOREVER, &adv_params, gap_event_cb, NULL);
     if (rc != 0) {
-        ESP_LOGE(TAG, "Gagal start advertising: %d", rc);
+        ESP_LOGE(TAG, "Gagal ble_gap_adv_start: %d", rc);
         return;
     }
-    ESP_LOGI(TAG, "BLE Receiver AKTIF & Menyiarkan Sinyal...");
+    ESP_LOGI(TAG, "BLE Receiver AKTIF & Menyiarkan Sinyal!");
 }
 
 static int gatt_access_cb(uint16_t conn_handle, uint16_t attr_handle,
