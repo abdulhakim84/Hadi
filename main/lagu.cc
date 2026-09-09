@@ -3,9 +3,9 @@
 #include <algorithm>
 
 static const std::unordered_map<std::string, std::string> kSongDatabase = {
-    {"lagu a", "https://example.com/audio/lagu_a.mp3"},
-    {"lagu b", "https://example.com/audio/lagu_b.mp3"},
-    {"bintang kecil", "https://example.com/audio/bintang_kecil.mp3"}
+    {"aku dan dirimu", "https://archive.org/download/TerpurukKuDisini/Aku%20Dan%20Dirimu.mp3"},
+    {"andaikan kau datang kembali", "https://archive.org/download/TerpurukKuDisini/Andaikan%20Kau%20Datang%20Kembali.mp3"},
+    {"cinta terbaik", "https://archive.org/download/TerpurukKuDisini/Cinta%20Terbaik.mp3}
 };
 
 std::string GetSongUrl(const std::string& song_name) {
