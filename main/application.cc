@@ -1181,16 +1181,18 @@ void Application::HandleStateChangedEvent() {
 void Application::PlaySong(const std::string& song_name) {
     Schedule([this, song_name]() {
         std::string url = GetSongUrl(song_name);
+
         if (url.empty()) {
-            ESP_LOGW("Application", "Lagu '%s' tidak ditemukan", song_name.c_str());
+            ESP_LOGW("Application", "Lagu '%s' tidak ada di database lagu.cc", song_name.c_str());
             return;
         }
 
-        ESP_LOGI("Application", "Memutar lagu '%s' dari URL: %s", song_name.c_str(), url.c_str());
+        // LOG INI AKAN MUNCUL DI SERIAL MONITOR JIKA FUNGSI DIPANGGIL
+        ESP_LOGI("Application", ">>> MEMUTAR LAGU: %s | URL: %s <<<", song_name.c_str(), url.c_str());
 
-        // Panggil pemutaran audio internal bawaan Xiaozhi
-        // (Sesuaikan dengan variabel service audio bawaan di file application.cc Anda)
-        // Contoh: audio_service_.PlayAudio(url); 
+        // Panggil pemutar audio bawaan Xiaozhi
+        // (Pastikan nama method sesuai dengan audio_service_ di firmware kamu, contoh: PlayUrl / PlayAudio)
+        audio_service_.PlayUrl(url); 
     });
 }
 
