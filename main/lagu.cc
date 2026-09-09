@@ -2,7 +2,6 @@
 #include <unordered_map>
 #include <algorithm>
 
-// Database internal lagu dan URL pemutaran
 static const std::unordered_map<std::string, std::string> kSongDatabase = {
     {"lagu a", "https://example.com/audio/lagu_a.mp3"},
     {"lagu b", "https://example.com/audio/lagu_b.mp3"},
