@@ -1,5 +1,4 @@
 #include "lagu.h"
-#include "application.h"
 #include <unordered_map>
 #include <algorithm>
 
