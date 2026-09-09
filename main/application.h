@@ -108,6 +108,7 @@ public:
     
     
     void PlaySong(const std::string& song_name);
+
     
     void Reboot();
     void WakeWordInvoke(const std::string& wake_word);
