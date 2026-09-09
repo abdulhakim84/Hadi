@@ -185,18 +185,18 @@ AddTool("self.drive_car",
         
         // Daftarkan tool baru ini di bagian pendaftaran MCP tools (bersama self.drive_car):
 AddTool("self.play_song",
-    "Memutar lagu berdasarkan judul lagu yang diminta pengguna.",
+    "Memutar lagu berdasarkan judul lagu.",
     PropertyList({
-        Property("song_name", kPropertyTypeString, "Judul lagu yang ingin diputar, contoh: 'lagu A'")
+        Property("song_name", kPropertyTypeString, "Judul lagu, contoh: 'lagu A'")
     }),
     [](const PropertyList& properties) -> ReturnValue {
         auto song_name = properties["song_name"].value<std::string>();
 
-        // Panggil pemutaran di Application
+        // Jalankan pemutaran di background
         Application::GetInstance().PlaySong(song_name);
 
-        // Respons langsung untuk diucapkan oleh cloud Xiaozhi di awal pemutaran
-        return "Memutar lagu " + song_name;
+        // String ini yang akan dibaca oleh TTS Xiaozhi Cloud secara otomatis
+        return "Memutar " + song_name + ", apakah ada lagu lain yang mau diputar?";
     });
 
     // Restore the original tools list to the end of the tools list
