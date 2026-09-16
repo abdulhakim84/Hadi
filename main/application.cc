@@ -12,7 +12,6 @@
 #include "websocket_protocol.h"
 #include "web_server.h"
 #include "ble_receiver.h"
-#include "lagu.h"
 
 #include <driver/gpio.h>
 #include "freertos/FreeRTOS.h"
@@ -1177,25 +1176,6 @@ void Application::HandleStateChangedEvent() {
             break;
     }
 }
-
-void Application::PlaySong(const std::string& song_name) {
-    Schedule([this, song_name]() {
-        std::string url = GetSongUrl(song_name);
-
-        if (url.empty()) {
-            ESP_LOGW("Application", "Lagu '%s' tidak ada di database lagu.cc", song_name.c_str());
-            return;
-        }
-
-        // LOG INI AKAN MUNCUL DI SERIAL MONITOR JIKA FUNGSI DIPANGGIL
-        ESP_LOGI("Application", ">>> MEMUTAR LAGU: %s | URL: %s <<<", song_name.c_str(), url.c_str());
-
-        // Panggil pemutar audio bawaan Xiaozhi
-        // (Pastikan nama method sesuai dengan audio_service_ di firmware kamu, contoh: PlayUrl / PlayAudio)
-        audio_service_.PlayUrl(url); 
-    });
-}
-
 
 void Application::StartListeningAudio() {
     // Runs in the main loop, either directly from HandleStateChangedEvent or
