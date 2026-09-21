@@ -156,7 +156,7 @@ void OledDisplay::SetupUI() {
     if (height_ == 64) {
         SetupUI_128x64();
     } else {
-        SetupUI_128x32();
+        SetupUI_128x64();
     }
 }
 
