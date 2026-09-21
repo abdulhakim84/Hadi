@@ -182,22 +182,6 @@ AddTool("self.drive_car",
             }
             return "Aksi tidak valid";
         });  
-        
-        // Daftarkan tool baru ini di bagian pendaftaran MCP tools (bersama self.drive_car):
-AddTool("self.play_song",
-    "Memutar lagu berdasarkan judul lagu yang diminta pengguna.",
-    PropertyList({
-        Property("song_name", kPropertyTypeString, "Judul lagu yang ingin diputar, contoh: 'lagu A'")
-    }),
-    [](const PropertyList& properties) -> ReturnValue {
-        auto song_name = properties["song_name"].value<std::string>();
-
-        // Panggil pemutaran di Application
-        Application::GetInstance().PlaySong(song_name);
-
-        // Respons langsung untuk diucapkan oleh cloud Xiaozhi di awal pemutaran
-        return "Memutar lagu " + song_name;
-    });
 
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), original_tools.begin(), original_tools.end());
