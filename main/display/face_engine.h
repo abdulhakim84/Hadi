@@ -23,7 +23,7 @@ private:
 
     FaceState state_ = FaceState::Idle;
 
-    // UBAH NILAI INI: Dari 30 menjadi 14 agar pas di layar 128x64
+    // DIPERBAIKI: Di repo TechTalkies nilainya 30 (penyebab overflow/crash). Ubah ke 14.
     int eye_size_ = 14;
 
     int idle_move_offset_x_ = 0;
