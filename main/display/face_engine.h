@@ -23,7 +23,8 @@ private:
 
     FaceState state_ = FaceState::Idle;
 
-    int eye_size_ = 30;
+    // UBAH NILAI INI: Dari 30 menjadi 14 agar pas di layar 128x64
+    int eye_size_ = 14;
 
     int idle_move_offset_x_ = 0;
     int idle_move_offset_y_ = 0;
