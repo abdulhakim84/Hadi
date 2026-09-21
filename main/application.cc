@@ -1177,46 +1177,6 @@ void Application::HandleStateChangedEvent() {
     }
 }
 
-void Application::PlaySong(const std::string& song_name) {
-    Schedule([this, song_name]() {
-        std::string url = GetSongUrl(song_name);
-
-        if (url.empty()) {
-            ESP_LOGW(TAG, "Lagu '%s' tidak ditemukan di lagu.cc", song_name.c_str());
-            return;
-        }
-
-        ESP_LOGI(TAG, "Memutar lagu '%s' dari URL: %s", song_name.c_str(), url.c_str());
-
-        auto audio_player = Board::GetInstance().GetAudioPlayer();
-        if (audio_player != nullptr) {
-            
-            // Event listener saat pemutaran audio berubah status
-            audio_player->OnStateChanged([this](AudioPlayerState state) {
-                // Berjalan HANYA saat decoder selesai membaca file lagu hingga habis (EOF)
-                if (state == AudioPlayerState::kFinished) {
-                    Schedule([this]() {
-                        ESP_LOGI(TAG, "Lagu selesai secara alami. Membuka dialog penawaran...");
-
-                        // Tampilkan pada UI layar jika ada
-                        auto display = Board::GetInstance().GetDisplay();
-                        if (display != nullptr) {
-                            display->SetChatMessage("assistant", "Lagu sudah diputar, apakah ada lagu lain yang mau diputar?");
-                        }
-
-                        // Kirim suara TTS dan buka mikrofon otomatis
-                        this->SpeakText("Lagu sudah diputar, apakah ada lagu lain yang mau diputar?");
-                        this->StartListening();
-                    });
-                }
-            });
-
-            audio_player->Play(url);
-        } else {
-            ESP_LOGE(TAG, "Audio player tidak tersedia!");
-        }
-    });
-}
 
 void Application::StartListeningAudio() {
     // Runs in the main loop, either directly from HandleStateChangedEvent or
