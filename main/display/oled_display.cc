@@ -41,37 +41,42 @@ void OledDisplay::SetupUI_128x64() {
 
     auto lvgl_theme = static_cast<LvglTheme*>(current_theme_);
     auto text_font = lvgl_theme->text_font()->font();
-    auto icon_font = lvgl_theme->icon_font()->font();
-    auto large_icon_font = lvgl_theme->large_icon_font()->font();
 
     auto screen = lv_screen_active();
     lv_obj_set_style_text_font(screen, text_font, 0);
-    lv_obj_set_style_text_color(screen, lv_color_black(), 0);
 
-    /* Container */
+    /* Amankan semua pointer label bawaan Xiaozhi agar tidak crash saat diakses background task */
+    status_label_ = nullptr;
+    notification_label_ = nullptr;
+    network_label_ = nullptr;
+    mute_label_ = nullptr;
+    battery_label_ = nullptr;
+    chat_message_label_ = nullptr;
+
+    /* Container Utama */
     container_ = lv_obj_create(screen);
-    lv_obj_set_size(container_, LV_HOR_RES, LV_VER_RES);
+    lv_obj_set_size(container_, 128, 64);
     lv_obj_set_flex_flow(container_, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_all(container_, 0, 0);
     lv_obj_set_style_border_width(container_, 0, 0);
-    lv_obj_set_style_pad_row(container_, 0, 0);
+    lv_obj_set_scrollbar_mode(container_, LV_SCROLLBAR_MODE_OFF);
 
-    /* Content */
+    /* Area Content Face Engine */
     content_ = lv_obj_create(container_);
     lv_obj_set_scrollbar_mode(content_, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_style_radius(content_, 0, 0);
     lv_obj_set_style_pad_all(content_, 0, 0);
-    lv_obj_set_width(content_, LV_HOR_RES);
-    lv_obj_set_size(content_, 128, 48);
-    lv_obj_set_flex_grow(content_, 1);
+    lv_obj_set_style_border_width(content_, 0, 0);
+    lv_obj_set_size(content_, 128, 64);
 
-    lv_obj_set_flex_flow(content_, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(content_, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-
+    /* Inisialisasi Face Engine */
+    if (face_engine_ != nullptr) {
+        delete face_engine_;
+    }
     face_engine_ = new FaceEngine();
     face_engine_->Init(content_);
 }
+
 
 LV_FONT_DECLARE(BUILTIN_TEXT_FONT);
 LV_FONT_DECLARE(BUILTIN_ICON_FONT);
