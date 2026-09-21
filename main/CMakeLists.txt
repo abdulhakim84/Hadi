@@ -28,7 +28,6 @@ set(SOURCES "audio/audio_codec.cc"
             "display/lvgl_display/gif/gifdec.c"
             "display/lvgl_display/jpg/image_to_jpeg.cpp"
             "display/lvgl_display/jpg/jpeg_to_image.c"
-            "display/face_engine.cc"
             "protocols/protocol.cc"
             "protocols/text_glyph_payload.cc"
             "protocols/mqtt_protocol.cc"
@@ -43,6 +42,7 @@ set(SOURCES "audio/audio_codec.cc"
             "main.cc"
             "web_server.cc"
             "ble_receiver.cc"
+            "display/face_engine.cc"
             )
 
 set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols")
