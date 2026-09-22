@@ -6,6 +6,7 @@
 #include <esp_err.h>
 #include <esp_log.h>
 #include <esp_lvgl_port.h>
+#include "assets/lang_config.h"
 
 #include "face_engine.h"
 
@@ -26,7 +27,7 @@ OledDisplay::OledDisplay(
     int height,
     bool mirror_x,
     bool mirror_y
-) : LvglDisplay("OledDisplay", width, height),
+) : LvglDisplay(),
     panel_io_(panel_io),
     panel_(panel) {
 
