@@ -1,18 +1,16 @@
 #include "oled_display.h"
 
-#include <string>
 #include <cstring>
 
 #include <esp_err.h>
 #include <esp_log.h>
 #include <esp_lvgl_port.h>
-#include "assets/lang_config.h"
 
+#include "assets/lang_config.h"
 #include "face_engine.h"
 
 #define TAG "OledDisplay"
 
-// FaceEngine global
 static FaceEngine* face_engine_ = nullptr;
 
 
@@ -27,8 +25,7 @@ OledDisplay::OledDisplay(
     int height,
     bool mirror_x,
     bool mirror_y
-) : LvglDisplay(),
-    panel_io_(panel_io),
+) : panel_io_(panel_io),
     panel_(panel) {
 
     lvgl_port_cfg_t port_cfg = ESP_LVGL_PORT_INIT_CONFIG();
@@ -47,13 +44,13 @@ OledDisplay::OledDisplay(
         .panel_handle = panel_,
         .control_handle = nullptr,
 
-        .buffer_size = static_cast<uint32_t>(width_ * height_),
+        .buffer_size = static_cast<uint32_t>(width * height),
 
         .double_buffer = false,
         .trans_size = 0,
 
-        .hres = static_cast<uint32_t>(width_),
-        .vres = static_cast<uint32_t>(height_),
+        .hres = static_cast<uint32_t>(width),
+        .vres = static_cast<uint32_t>(height),
 
         .monochrome = true,
 
@@ -86,12 +83,17 @@ OledDisplay::~OledDisplay() {
 
 
 // ============================================================
-// Lock / Unlock
+// Lock
 // ============================================================
 
 bool OledDisplay::Lock(int timeout_ms) {
     return LvglDisplay::Lock(timeout_ms);
 }
+
+
+// ============================================================
+// Unlock
+// ============================================================
 
 void OledDisplay::Unlock() {
     LvglDisplay::Unlock();
@@ -103,6 +105,7 @@ void OledDisplay::Unlock() {
 // ============================================================
 
 void OledDisplay::SetupUI() {
+
     Display::SetupUI();
 
     if (width_ == 128 && height_ == 64) {
@@ -112,7 +115,7 @@ void OledDisplay::SetupUI() {
 
 
 // ============================================================
-// Setup OLED 128x64
+// OLED 128x64
 // ============================================================
 
 void OledDisplay::SetupUI_128x64() {
@@ -121,10 +124,7 @@ void OledDisplay::SetupUI_128x64() {
 
     lv_obj_t* screen = lv_screen_active();
 
-    // --------------------------------------------------------
-    // Bersihkan seluruh tampilan
-    // --------------------------------------------------------
-
+    // Bersihkan UI bawaan
     lv_obj_clean(screen);
 
     // Background hitam
@@ -140,9 +140,9 @@ void OledDisplay::SetupUI_128x64() {
         0
     );
 
-    // --------------------------------------------------------
-    // Buat container langsung memenuhi OLED
-    // --------------------------------------------------------
+    // ========================================================
+    // Container utama
+    // ========================================================
 
     container_ = lv_obj_create(screen);
 
@@ -183,23 +183,28 @@ void OledDisplay::SetupUI_128x64() {
         LV_OBJ_FLAG_SCROLLABLE
     );
 
-    // --------------------------------------------------------
+
+    // ========================================================
     // FaceEngine
-    // --------------------------------------------------------
+    // ========================================================
 
     face_engine_ = new FaceEngine();
 
     face_engine_->Init(container_);
 
-    // Mulai dari Idle
-    face_engine_->SetState(FaceState::Idle);
+    face_engine_->SetState(
+        FaceState::Idle
+    );
 
-    ESP_LOGI(TAG, "FaceEngine initialized");
+    ESP_LOGI(
+        TAG,
+        "FaceEngine initialized"
+    );
 }
 
 
 // ============================================================
-// Status Xiaozhi
+// Status
 // ============================================================
 
 void OledDisplay::SetStatus(const char* status) {
@@ -212,19 +217,29 @@ void OledDisplay::SetStatus(const char* status) {
         return;
     }
 
-    if (strcmp(status, Lang::Strings::STANDBY) == 0) {
+
+    if (strcmp(
+            status,
+            Lang::Strings::STANDBY
+        ) == 0) {
 
         face_engine_->SetState(
             FaceState::Idle
         );
 
-    } else if (strcmp(status, Lang::Strings::LISTENING) == 0) {
+    } else if (strcmp(
+                   status,
+                   Lang::Strings::LISTENING
+               ) == 0) {
 
         face_engine_->SetState(
             FaceState::Listening
         );
 
-    } else if (strcmp(status, Lang::Strings::SPEAKING) == 0) {
+    } else if (strcmp(
+                   status,
+                   Lang::Strings::SPEAKING
+               ) == 0) {
 
         face_engine_->SetState(
             FaceState::Speaking
@@ -240,41 +255,40 @@ void OledDisplay::SetStatus(const char* status) {
 
 
 // ============================================================
-// Chat Message
+// Chat
 //
-// Xiaozhi masih boleh memanggil fungsi ini,
-// tetapi kita sengaja tidak menampilkan teks.
+// Tidak menampilkan chat sama sekali.
 // ============================================================
 
 void OledDisplay::SetChatMessage(
     const char* role,
     const char* content
 ) {
-    // Tidak melakukan apa-apa.
+    // Sengaja kosong
 }
 
 
 // ============================================================
 // Emotion
 //
-// Untuk sekarang tidak digunakan oleh FaceEngine.
+// Tidak digunakan.
 // ============================================================
 
 void OledDisplay::SetEmotion(
     const char* emotion
 ) {
-    // Tidak melakukan apa-apa.
+    // Sengaja kosong
 }
 
 
 // ============================================================
 // Theme
 //
-// Wajah menggunakan warna sendiri.
+// Tidak digunakan.
 // ============================================================
 
 void OledDisplay::SetTheme(
     Theme* theme
 ) {
-    // Tidak melakukan apa-apa.
+    // Sengaja kosong
 }
