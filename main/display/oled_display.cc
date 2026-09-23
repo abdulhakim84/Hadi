@@ -11,7 +11,7 @@
 // PENGATURAN UKURAN DAN POSISI MATA (Bisa diubah sesuka hati di sini)
 // =================================================================
 #define EYE_WIDTH       28   // Lebar mata (kurangi nilai ini jika terlalu lebar)
-#define EYE_HEIGHT      20   // Tinggi mata (kurangi nilai ini jika terlalu tinggi/panjang)
+#define EYE_HEIGHT      16   // Tinggi mata (kurangi nilai ini jika terlalu tinggi/panjang)
 #define EYE_RADIUS       7   // Kehalusan sudut mata (0 = kotak sempurna, semakin besar semakin membulat)
 #define EYE_OFFSET_X    20   // Jarak mata dari titik tengah layar
 // =================================================================
