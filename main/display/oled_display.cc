@@ -4,7 +4,6 @@
 #include <esp_err.h>
 #include <esp_log.h>
 #include <esp_lvgl_port.h>
-#include "assets/lang_config.h"
 
 #define TAG "OledDisplay"
 
@@ -20,7 +19,7 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
     ESP_LOGI(TAG, "Initialize LVGL");
     lvgl_port_cfg_t port_cfg = ESP_LVGL_PORT_INIT_CONFIG();
     port_cfg.task_priority = 1;
-    port_cfg.task_stack = 6144;
+    port_cfg.task_stack = 8192;
 #if CONFIG_SOC_CPU_CORES_NUM > 1
     port_cfg.task_affinity = 1;
 #endif
@@ -48,7 +47,7 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
                 .buff_dma = 1,
                 .buff_spiram = 0,
                 .sw_rotate = 0,
-                .full_refresh = 0,
+                .full_refresh = 1, // KUNCI 1: Ubah ke 1 agar tidak terjadi korupsi data parsial pada OLED
                 .direct_mode = 0,
             },
     };
@@ -86,22 +85,31 @@ void OledDisplay::SetupUI() {
         return;
     }
 
-    LvglDisplay::SetupUI();  // Menggunakan parent class LvglDisplay
+    LvglDisplay::SetupUI();
 
     DisplayLockGuard lock(this);
     auto screen = lv_screen_active();
 
-    // Container Utama Animasi Wajah
+    // Reset background screen ke warna hitam murni
+    lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
+
+    // Container Utama Animasi
     container_ = lv_obj_create(screen);
     lv_obj_set_size(container_, width_, height_);
     lv_obj_set_style_border_width(container_, 0, 0);
     lv_obj_set_style_bg_opa(container_, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_pad_all(container_, 0, 0);
+    lv_obj_remove_flag(container_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_center(container_);
 
-    // Elemen Wajah
+    // Elemen Mata & Mulut
     left_eye_ = lv_obj_create(container_);
     right_eye_ = lv_obj_create(container_);
     mouth_ = lv_obj_create(container_);
+
+    lv_obj_remove_flag(left_eye_, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(right_eye_, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(mouth_, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_set_style_bg_color(left_eye_, lv_color_white(), 0);
     lv_obj_set_style_bg_color(right_eye_, lv_color_white(), 0);
@@ -121,43 +129,41 @@ void OledDisplay::SetupUI() {
     lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_size_ - EYE_OFFSET_X, -EYE_OFFSET_Y);
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_size_ + EYE_OFFSET_X, -EYE_OFFSET_Y);
 
-    // Timer LVGL untuk Animasi
+    // KUNCI 2: Timer diubah ke 80ms (12.5 FPS) agar bus I2C lebih stabil
     timer_ = lv_timer_create(
         [](lv_timer_t* t) {
             auto disp = static_cast<OledDisplay*>(lv_timer_get_user_data(t));
             disp->Update();
         },
-        60, this);
+        80, this);
 }
 
 bool OledDisplay::Lock(int timeout_ms) { return lvgl_port_lock(timeout_ms); }
 
 void OledDisplay::Unlock() { lvgl_port_unlock(); }
 
-void OledDisplay::SetTheme(Theme* theme) {
-    // Dikosongkan karena tidak lagi menggunakan tema font/teks
-}
+void OledDisplay::SetTheme(Theme* theme) {}
 
 void OledDisplay::SetState(FaceState state) { 
+    DisplayLockGuard lock(this);
     state_ = state; 
 }
 
 void OledDisplay::SetEmotion(const char* emotion) {
     if (emotion == nullptr) return;
 
+    DisplayLockGuard lock(this);
     std::string em(emotion);
     if (em == "listening" || em == "think") {
-        SetState(FaceState::Listening);
+        state_ = FaceState::Listening;
     } else if (em == "speaking" || em == "talk") {
-        SetState(FaceState::Speaking);
+        state_ = FaceState::Speaking;
     } else {
-        SetState(FaceState::Idle);
+        state_ = FaceState::Idle;
     }
 }
 
-void OledDisplay::SetChatMessage(const char* role, const char* content) {
-    // Dikosongkan karena elemen teks pesan sudah dihapus
-}
+void OledDisplay::SetChatMessage(const char* role, const char* content) {}
 
 void OledDisplay::IdleBehavior(int base_eye_height) {
     if (rand() % 40 == 0) {
@@ -212,7 +218,6 @@ void OledDisplay::SpeakingBehavior(int eye_height) {
         speak_last_update_ = now;
 
         int r = rand() % 100;
-
         if (r < 20)
             speak_mouth_target_ = 2;
         else if (r < 50)
@@ -227,6 +232,8 @@ void OledDisplay::SpeakingBehavior(int eye_height) {
         speak_mouth_current_ += 2;
     else if (speak_mouth_current_ > speak_mouth_target_)
         speak_mouth_current_ -= 2;
+
+    if (speak_mouth_current_ < 2) speak_mouth_current_ = 2;
 
     lv_obj_set_size(mouth_, 15, speak_mouth_current_);
     lv_obj_set_style_radius(mouth_, 8, 0);
