@@ -42,7 +42,6 @@ set(SOURCES "audio/audio_codec.cc"
             "main.cc"
             "web_server.cc"
             "ble_receiver.cc"
-            "display/face_engine.cc"
             )
 
 set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols")
