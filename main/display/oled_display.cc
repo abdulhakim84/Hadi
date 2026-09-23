@@ -86,19 +86,19 @@ void OledDisplay::SetupUI() {
         return;
     }
 
-    Display::SetupUI();  // Tandai SetupUI telah dipanggil
+    LvglDisplay::SetupUI();  // Menggunakan parent class LvglDisplay
 
     DisplayLockGuard lock(this);
     auto screen = lv_screen_active();
 
-    // Container Utama untuk Animasi Wajah
+    // Container Utama Animasi Wajah
     container_ = lv_obj_create(screen);
     lv_obj_set_size(container_, width_, height_);
     lv_obj_set_style_border_width(container_, 0, 0);
     lv_obj_set_style_bg_opa(container_, LV_OPA_TRANSP, 0);
     lv_obj_center(container_);
 
-    // Elemen Wajah: Mata Kiri, Mata Kanan, Mulut
+    // Elemen Wajah
     left_eye_ = lv_obj_create(container_);
     right_eye_ = lv_obj_create(container_);
     mouth_ = lv_obj_create(container_);
@@ -121,7 +121,7 @@ void OledDisplay::SetupUI() {
     lv_obj_align(left_eye_, LV_ALIGN_CENTER, -eye_size_ - EYE_OFFSET_X, -EYE_OFFSET_Y);
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, eye_size_ + EYE_OFFSET_X, -EYE_OFFSET_Y);
 
-    // Timer LVGL untuk animasi ekspresi (60ms)
+    // Timer LVGL untuk Animasi
     timer_ = lv_timer_create(
         [](lv_timer_t* t) {
             auto disp = static_cast<OledDisplay*>(lv_timer_get_user_data(t));
@@ -134,14 +134,17 @@ bool OledDisplay::Lock(int timeout_ms) { return lvgl_port_lock(timeout_ms); }
 
 void OledDisplay::Unlock() { lvgl_port_unlock(); }
 
+void OledDisplay::SetTheme(Theme* theme) {
+    // Dikosongkan karena tidak lagi menggunakan tema font/teks
+}
+
 void OledDisplay::SetState(FaceState state) { 
     state_ = state; 
 }
 
 void OledDisplay::SetEmotion(const char* emotion) {
     if (emotion == nullptr) return;
-    
-    // Pemetaan nama emosi ke status animasi wajah
+
     std::string em(emotion);
     if (em == "listening" || em == "think") {
         SetState(FaceState::Listening);
@@ -153,7 +156,7 @@ void OledDisplay::SetEmotion(const char* emotion) {
 }
 
 void OledDisplay::SetChatMessage(const char* role, const char* content) {
-    // Fungsi dikosongkan karena tampilan teks pesan dihapus
+    // Dikosongkan karena elemen teks pesan sudah dihapus
 }
 
 void OledDisplay::IdleBehavior(int base_eye_height) {
