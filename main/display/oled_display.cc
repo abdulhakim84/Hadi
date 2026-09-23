@@ -7,13 +7,22 @@
 
 #define TAG "OledDisplay"
 
+// =================================================================
+// PENGATURAN UKURAN DAN POSISI MATA (Bisa diubah sesuka hati di sini)
+// =================================================================
+#define EYE_WIDTH       28   // Lebar mata (kurangi nilai ini jika terlalu lebar)
+#define EYE_HEIGHT      20   // Tinggi mata (kurangi nilai ini jika terlalu tinggi/panjang)
+#define EYE_RADIUS       7   // Kehalusan sudut mata (0 = kotak sempurna, semakin besar semakin membulat)
+#define EYE_OFFSET_X    18   // Jarak mata dari titik tengah layar
+// =================================================================
+
 OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel,
                          int width, int height, bool mirror_x, bool mirror_y)
     : panel_io_(panel_io), panel_(panel) {
     width_ = width;
     height_ = height;
 
-    // Balikkan warna jika background masih putih
+    // Invert warna agar background hitam & mata biru menyala
     esp_lcd_panel_invert_color(panel_, true); 
 
     ESP_LOGI(TAG, "Initialize LVGL");
@@ -47,7 +56,7 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
                 .buff_dma = 1,
                 .buff_spiram = 0,
                 .sw_rotate = 0,
-                .full_refresh = 1, // Kunci kestabilan I2C OLED
+                .full_refresh = 1,
                 .direct_mode = 0,
             },
     };
@@ -90,10 +99,8 @@ void OledDisplay::SetupUI() {
     DisplayLockGuard lock(this);
     auto screen = lv_screen_active();
 
-    // Set background layar menjadi hitam
     lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
 
-    // Container Utama
     container_ = lv_obj_create(screen);
     lv_obj_set_size(container_, width_, height_);
     lv_obj_set_style_border_width(container_, 0, 0);
@@ -102,33 +109,27 @@ void OledDisplay::SetupUI() {
     lv_obj_remove_flag(container_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_center(container_);
 
-    // Buat hanya 2 Mata (Tanpa Mulut)
     left_eye_ = lv_obj_create(container_);
     right_eye_ = lv_obj_create(container_);
 
     lv_obj_remove_flag(left_eye_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_remove_flag(right_eye_, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Warna Mata Menyala (Putih di LVGL = Biru Terang di OLED Biru)
     lv_obj_set_style_bg_color(left_eye_, lv_color_white(), 0);
     lv_obj_set_style_bg_color(right_eye_, lv_color_white(), 0);
 
     lv_obj_set_style_border_width(left_eye_, 0, 0);
     lv_obj_set_style_border_width(right_eye_, 0, 0);
 
-    // Ciri khas EMO: Lengkungan sudut (Radius 10)
-    lv_obj_set_style_radius(left_eye_, 10, 0);
-    lv_obj_set_style_radius(right_eye_, 10, 0);
+    lv_obj_set_style_radius(left_eye_, EYE_RADIUS, 0);
+    lv_obj_set_style_radius(right_eye_, EYE_RADIUS, 0);
 
-    // Ukuran awal mata besar EMO (Lebar 36px, Tinggi 32px)
-    lv_obj_set_size(left_eye_, 36, 32);
-    lv_obj_set_size(right_eye_, 36, 32);
+    lv_obj_set_size(left_eye_, EYE_WIDTH, EYE_HEIGHT);
+    lv_obj_set_size(right_eye_, EYE_WIDTH, EYE_HEIGHT);
 
-    // Posisi Mata Kiri (-22px) dan Kanan (+22px) dari Tengah
-    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -22, 0);
-    lv_obj_align(right_eye_, LV_ALIGN_CENTER, 22, 0);
+    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X, 0);
+    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, 0);
 
-    // Timer animasi 80ms
     timer_ = lv_timer_create(
         [](lv_timer_t* t) {
             auto disp = static_cast<OledDisplay*>(lv_timer_get_user_data(t));
@@ -164,93 +165,85 @@ void OledDisplay::SetEmotion(const char* emotion) {
 
 void OledDisplay::SetChatMessage(const char* role, const char* content) {}
 
-// Mode Diam / Standby (EMO Style)
 void OledDisplay::IdleBehavior(int base_eye_height) {
-    // Lirik mata acak sesekali
     if (rand() % 50 == 0) {
-        idle_move_offset_x_ = (rand() % 7) - 3;
+        idle_move_offset_x_ = (rand() % 5) - 2;
         idle_move_offset_y_ = (rand() % 5) - 2;
     }
 
-    int eye_h = base_eye_height; // Normal = 32px
-    int eye_w = (eye_h < 10) ? 38 : 36; // Saat kedip, lebar agak meluas sedikit
+    int eye_h = base_eye_height;
+    int eye_w = (eye_h < 8) ? (EYE_WIDTH + 2) : EYE_WIDTH;
 
     lv_obj_set_size(left_eye_, eye_w, eye_h);
     lv_obj_set_size(right_eye_, eye_w, eye_h);
 
-    // Sudut tetap membulat
-    lv_obj_set_style_radius(left_eye_, (eye_h < 10) ? 2 : 10, 0);
-    lv_obj_set_style_radius(right_eye_, (eye_h < 10) ? 2 : 10, 0);
+    lv_obj_set_style_radius(left_eye_, (eye_h < 8) ? 2 : EYE_RADIUS, 0);
+    lv_obj_set_style_radius(right_eye_, (eye_h < 8) ? 2 : EYE_RADIUS, 0);
 
-    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -22 + idle_move_offset_x_, idle_move_offset_y_);
-    lv_obj_align(right_eye_, LV_ALIGN_CENTER, 22 + idle_move_offset_x_, idle_move_offset_y_);
+    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X + idle_move_offset_x_, idle_move_offset_y_);
+    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X + idle_move_offset_x_, idle_move_offset_y_);
 }
 
-// Mode Mendengarkan / Menyimak (Mata agak miring / penasaran)
 void OledDisplay::ListeningBehavior(int base_eye_height) {
-    // Mata kanan sedikit lebih besar dari mata kiri (efek EMO heran/menyimak)
-    int left_h = base_eye_height - 4;
+    int left_h = base_eye_height - 3;
     int right_h = base_eye_height + 2;
 
-    lv_obj_set_size(left_eye_, 32, left_h);
-    lv_obj_set_size(right_eye_, 38, right_h);
+    lv_obj_set_size(left_eye_, EYE_WIDTH - 2, left_h);
+    lv_obj_set_size(right_eye_, EYE_WIDTH + 2, right_h);
 
-    lv_obj_set_style_radius(left_eye_, 8, 0);
-    lv_obj_set_style_radius(right_eye_, 10, 0);
+    lv_obj_set_style_radius(left_eye_, EYE_RADIUS - 1, 0);
+    lv_obj_set_style_radius(right_eye_, EYE_RADIUS, 0);
 
-    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -22, -2);
-    lv_obj_align(right_eye_, LV_ALIGN_CENTER, 22, 2);
+    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X, -2);
+    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, 2);
 }
 
-// Mode Bicara (Karakter Mata Memantul/Bicara menggantikan Mulut)
 void OledDisplay::SpeakingBehavior(int eye_height) {
     uint32_t now = lv_tick_get();
 
     if (now - speak_last_update_ > 100) {
         speak_last_update_ = now;
-        // Variasi tinggi mata secara acak saat bicara (24px sampai 38px)
-        speak_mouth_target_ = 24 + (rand() % 15);
+        // Variasi tinggi mata saat bicara
+        speak_mouth_target_ = (EYE_HEIGHT - 6) + (rand() % 10);
     }
 
     int eye_h = speak_mouth_target_;
-    if (eye_height < 10) eye_h = eye_height; // Jika sedang kedip
+    if (eye_height < 8) eye_h = eye_height;
 
-    // Efek squash & stretch: jika tinggi mengecil, lebar melebar
-    int eye_w = 36 + (32 - eye_h) / 2;
+    int eye_w = EYE_WIDTH + (EYE_HEIGHT - eye_h) / 2;
 
     lv_obj_set_size(left_eye_, eye_w, eye_h);
     lv_obj_set_size(right_eye_, eye_w, eye_h);
 
-    lv_obj_set_style_radius(left_eye_, (eye_h < 10) ? 2 : 10, 0);
-    lv_obj_set_style_radius(right_eye_, (eye_h < 10) ? 2 : 10, 0);
+    lv_obj_set_style_radius(left_eye_, (eye_h < 8) ? 2 : EYE_RADIUS, 0);
+    lv_obj_set_style_radius(right_eye_, (eye_h < 8) ? 2 : EYE_RADIUS, 0);
 
-    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -22, 0);
-    lv_obj_align(right_eye_, LV_ALIGN_CENTER, 22, 0);
+    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X, 0);
+    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, 0);
 }
 
 void OledDisplay::Update() {
     if (!container_) return;
 
-    // Logika Berkedip
     if (blink_phase_ == 0) {
         if (rand() % 80 == 0) {
             blink_phase_ = 1;
         }
     }
 
-    int eye_height = 32; // Tinggi standar mata EMO
+    int eye_height = EYE_HEIGHT;
 
     switch (blink_phase_) {
         case 1:
-            eye_height = 16;
+            eye_height = EYE_HEIGHT / 2;
             blink_phase_ = 2;
             break;
         case 2:
-            eye_height = 3;  // Garis tipis saat kedip penuh
+            eye_height = 2; // Kedip rapat
             blink_phase_ = 3;
             break;
         case 3:
-            eye_height = 16;
+            eye_height = EYE_HEIGHT / 2;
             blink_phase_ = 0;
             break;
         default:
