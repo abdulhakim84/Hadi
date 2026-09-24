@@ -1,6 +1,7 @@
 #include "oled_display.h"
 
 #include <stdlib.h>
+#include <string>
 #include <esp_err.h>
 #include <esp_log.h>
 #include <esp_lvgl_port.h>
@@ -8,12 +9,12 @@
 #define TAG "OledDisplay"
 
 // =================================================================
-// PENGATURAN UKURAN DAN POSISI MATA (Bisa diubah sesuka hati di sini)
+// PENGATURAN UTAMA UKURAN & POSISI MATA ROBOT (EMO STYLE)
 // =================================================================
-#define EYE_WIDTH       28   // Lebar mata (kurangi nilai ini jika terlalu lebar)
-#define EYE_HEIGHT      16   // Tinggi mata (kurangi nilai ini jika terlalu tinggi/panjang)
-#define EYE_RADIUS       7   // Kehalusan sudut mata (0 = kotak sempurna, semakin besar semakin membulat)
-#define EYE_OFFSET_X    20   // Jarak mata dari titik tengah layar
+#define EYE_WIDTH       28   // Lebar mata terbuka (px)
+#define EYE_HEIGHT      16   // Tinggi mata terbuka (px)
+#define EYE_RADIUS       7   // Kelengkungan sudut mata (px)
+#define EYE_OFFSET_X    20   // Jarak tiap mata dari titik tengah layar (px)
 // =================================================================
 
 OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel,
@@ -22,8 +23,8 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
     width_ = width;
     height_ = height;
 
-    // Invert warna agar background hitam & mata biru menyala
-    esp_lcd_panel_invert_color(panel_, true); 
+    // Invert warna agar background hitam murni & piksel mata biru menyala
+    esp_lcd_panel_invert_color(panel_, true);
 
     ESP_LOGI(TAG, "Initialize LVGL");
     lvgl_port_cfg_t port_cfg = ESP_LVGL_PORT_INIT_CONFIG();
@@ -56,7 +57,7 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
                 .buff_dma = 1,
                 .buff_spiram = 0,
                 .sw_rotate = 0,
-                .full_refresh = 1,
+                .full_refresh = 1, // Kunci kestabilan transmisi I2C/SPI OLED
                 .direct_mode = 0,
             },
     };
@@ -99,8 +100,10 @@ void OledDisplay::SetupUI() {
     DisplayLockGuard lock(this);
     auto screen = lv_screen_active();
 
+    // Set background layar utama ke warna Hitam
     lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
 
+    // Container Utama Animasi
     container_ = lv_obj_create(screen);
     lv_obj_set_size(container_, width_, height_);
     lv_obj_set_style_border_width(container_, 0, 0);
@@ -109,12 +112,14 @@ void OledDisplay::SetupUI() {
     lv_obj_remove_flag(container_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_center(container_);
 
+    // Membuat Objek Mata Kiri dan Mata Kanan (Tanpa Mulut)
     left_eye_ = lv_obj_create(container_);
     right_eye_ = lv_obj_create(container_);
 
     lv_obj_remove_flag(left_eye_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_remove_flag(right_eye_, LV_OBJ_FLAG_SCROLLABLE);
 
+    // Set warna mata ke Putih di LVGL (menjadi Biru Menyala di OLED)
     lv_obj_set_style_bg_color(left_eye_, lv_color_white(), 0);
     lv_obj_set_style_bg_color(right_eye_, lv_color_white(), 0);
 
@@ -130,6 +135,7 @@ void OledDisplay::SetupUI() {
     lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X, 0);
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, 0);
 
+    // Timer pembaharuan animasi (80 ms / 12.5 FPS)
     timer_ = lv_timer_create(
         [](lv_timer_t* t) {
             auto disp = static_cast<OledDisplay*>(lv_timer_get_user_data(t));
@@ -165,25 +171,26 @@ void OledDisplay::SetEmotion(const char* emotion) {
 
 void OledDisplay::SetChatMessage(const char* role, const char* content) {}
 
+// Mode IDLE: Mode Tidur Terpejam (- -) dengan Efek Bernapas Halus
 void OledDisplay::IdleBehavior(int base_eye_height) {
-    if (rand() % 50 == 0) {
-        idle_move_offset_x_ = (rand() % 5) - 2;
-        idle_move_offset_y_ = (rand() % 5) - 2;
-    }
+    uint32_t now = lv_tick_get();
 
-    int eye_h = base_eye_height;
-    int eye_w = (eye_h < 8) ? (EYE_WIDTH + 2) : EYE_WIDTH;
+    // Efek bernapas: Tinggi mata berdenyut halus (3px - 4px) setiap ~1.5 detik
+    int breath_cycle = (now / 750) % 2; 
+    int sleep_eye_h = 3 + breath_cycle;
+    int sleep_eye_w = EYE_WIDTH - 2;
 
-    lv_obj_set_size(left_eye_, eye_w, eye_h);
-    lv_obj_set_size(right_eye_, eye_w, eye_h);
+    lv_obj_set_size(left_eye_, sleep_eye_w, sleep_eye_h);
+    lv_obj_set_size(right_eye_, sleep_eye_w, sleep_eye_h);
 
-    lv_obj_set_style_radius(left_eye_, (eye_h < 8) ? 2 : EYE_RADIUS, 0);
-    lv_obj_set_style_radius(right_eye_, (eye_h < 8) ? 2 : EYE_RADIUS, 0);
+    lv_obj_set_style_radius(left_eye_, 2, 0);
+    lv_obj_set_style_radius(right_eye_, 2, 0);
 
-    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X + idle_move_offset_x_, idle_move_offset_y_);
-    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X + idle_move_offset_x_, idle_move_offset_y_);
+    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X, 2);
+    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, 2);
 }
 
+// Mode LISTENING: Mata Bangun/Menyimak Penasaran (Mata sedikit asimetris)
 void OledDisplay::ListeningBehavior(int base_eye_height) {
     int left_h = base_eye_height - 3;
     int right_h = base_eye_height + 2;
@@ -198,18 +205,20 @@ void OledDisplay::ListeningBehavior(int base_eye_height) {
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, 2);
 }
 
+// Mode SPEAKING: Animasi Mata Memantul/Bicara (Squash & Stretch pengganti mulut)
 void OledDisplay::SpeakingBehavior(int eye_height) {
     uint32_t now = lv_tick_get();
 
     if (now - speak_last_update_ > 100) {
         speak_last_update_ = now;
-        // Variasi tinggi mata saat bicara
+        // Variasi tinggi mata saat AI berbicara
         speak_mouth_target_ = (EYE_HEIGHT - 6) + (rand() % 10);
     }
 
     int eye_h = speak_mouth_target_;
-    if (eye_height < 8) eye_h = eye_height;
+    if (eye_height < 8) eye_h = eye_height; // Jika sedang berkedip
 
+    // Efek Squash & Stretch: Jika mata mengecil secara vertikal, lebar membesar secara horizontal
     int eye_w = EYE_WIDTH + (EYE_HEIGHT - eye_h) / 2;
 
     lv_obj_set_size(left_eye_, eye_w, eye_h);
@@ -225,21 +234,27 @@ void OledDisplay::SpeakingBehavior(int eye_height) {
 void OledDisplay::Update() {
     if (!container_) return;
 
-    if (blink_phase_ == 0) {
-        if (rand() % 80 == 0) {
-            blink_phase_ = 1;
+    // Logika berkedip hanya aktif saat BUKAN mode Idle (Tidur)
+    if (state_ != FaceState::Idle) {
+        if (blink_phase_ == 0) {
+            if (rand() % 80 == 0) {
+                blink_phase_ = 1;
+            }
         }
+    } else {
+        blink_phase_ = 0; // Kunci mata tetap terpejam saat tidur
     }
 
     int eye_height = EYE_HEIGHT;
 
+    // Tahapan animasi berkedip
     switch (blink_phase_) {
         case 1:
             eye_height = EYE_HEIGHT / 2;
             blink_phase_ = 2;
             break;
         case 2:
-            eye_height = 2; // Kedip rapat
+            eye_height = 2; // Mata tertutup rapat saat kedip
             blink_phase_ = 3;
             break;
         case 3:
@@ -250,6 +265,7 @@ void OledDisplay::Update() {
             break;
     }
 
+    // Jalankan animasi sesuai status sistem
     switch (state_) {
         case FaceState::Idle:
             IdleBehavior(eye_height);
