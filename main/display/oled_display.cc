@@ -13,9 +13,9 @@
 // PENGATURAN UTAMA UKURAN & POSISI MATA ROBOT (EMO STYLE)
 // =================================================================
 #define EYE_WIDTH       28   // Lebar mata terbuka (px)
-#define EYE_HEIGHT      20   // Tinggi mata terbuka (px)
+#define EYE_HEIGHT      16   // Tinggi mata terbuka (px)
 #define EYE_RADIUS       7   // Kelengkungan sudut mata (px)
-#define EYE_OFFSET_X    18   // Jarak tiap mata dari titik tengah layar (px)
+#define EYE_OFFSET_X    22   // Jarak tiap mata dari titik tengah layar (px)
 // =================================================================
 
 OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel,
@@ -159,7 +159,7 @@ void OledDisplay::SetState(FaceState state) {
     state_ = state; 
 }
 
-// Tangkap status sistem dari application.cc (WiFi, Connecting, Listening, Speaking, Standby, dll)
+// Tangkap status sistem dari application.cc
 void OledDisplay::SetStatus(const char* status) {
     if (status == nullptr) return;
 
@@ -167,26 +167,27 @@ void OledDisplay::SetStatus(const char* status) {
     std::string st(status);
     std::transform(st.begin(), st.end(), st.begin(), ::tolower);
 
-    ESP_LOGI(TAG, "SetStatus dipanggil dari application.cc: %s", status);
+    ESP_LOGI(TAG, "SetStatus dipanggil: %s", status);
 
-    // Deteksi kata kunci Listening (Inggris & Indonesia)
+    // Deteksi kata kunci Listening
     if (st.find("listen") != std::string::npos || st.find("dengar") != std::string::npos || 
         st.find("think") != std::string::npos || st.find("pikir") != std::string::npos) {
         state_ = FaceState::Listening;
     } 
-    // Deteksi kata kunci Speaking (Inggris & Indonesia)
+    // Deteksi kata kunci Speaking
     else if (st.find("speak") != std::string::npos || st.find("bicara") != std::string::npos || 
              st.find("jawab") != std::string::npos || st.find("say") != std::string::npos) {
         state_ = FaceState::Speaking;
     } 
-    // Deteksi kata kunci Standby / Sleep
+    // Deteksi status Standby / Idle
     else if (st.find("standby") != std::string::npos || st.find("ready") != std::string::npos || 
-             st.find("sleep") != std::string::npos || st.find("siap") != std::string::npos) {
+             st.find("sleep") != std::string::npos || st.find("siap") != std::string::npos ||
+             st.find("tunggu") != std::string::npos || st.find("idle") != std::string::npos) {
         state_ = FaceState::Idle;
     }
 }
 
-// Tangkap emosi dari server/application.cc
+// Tangkap emosi dari server / application.cc
 void OledDisplay::SetEmotion(const char* emotion) {
     if (emotion == nullptr) return;
 
@@ -194,7 +195,7 @@ void OledDisplay::SetEmotion(const char* emotion) {
     std::string em(emotion);
     std::transform(em.begin(), em.end(), em.begin(), ::tolower);
 
-    ESP_LOGI(TAG, "SetEmotion dipanggil dari application.cc: %s", emotion);
+    ESP_LOGI(TAG, "SetEmotion dipanggil: %s", emotion);
 
     if (em.find("listen") != std::string::npos || em.find("think") != std::string::npos) {
         state_ = FaceState::Listening;
@@ -202,11 +203,10 @@ void OledDisplay::SetEmotion(const char* emotion) {
     else if (em.find("speak") != std::string::npos || em.find("talk") != std::string::npos) {
         state_ = FaceState::Speaking;
     } 
-    else if (em.find("sleep") != std::string::npos || em.find("idle") != std::string::npos) {
+    else {
+        // "neutral", "sleep", "idle", dll. Semua dikembalikan ke mode Idle (mata terpejam/tidur)
         state_ = FaceState::Idle;
     }
-    // PENTING: Jika emotion berupa "neutral", "happy", "sad", dll., 
-    // JANGAN UBAH state_! Biarkan state_ tetap berada di state terakhir yang diset oleh SetStatus/SetChatMessage.
 }
 
 // Tangkap percakapan masuk dari application.cc
@@ -216,11 +216,9 @@ void OledDisplay::SetChatMessage(const char* role, const char* content) {
     DisplayLockGuard lock(this);
     std::string r(role);
 
-    // Jika pesan dari user -> Ubah ke Mode Listening
     if (r == "user") {
         state_ = FaceState::Listening;
     } 
-    // Jika pesan dari assistant -> Ubah ke Mode Speaking
     else if (r == "assistant") {
         state_ = FaceState::Speaking;
     }
@@ -245,7 +243,7 @@ void OledDisplay::IdleBehavior(int base_eye_height) {
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, 2);
 }
 
-// Mode LISTENING: Mata Bangun/Menyimak Penasaran (Mata sedikit asimetris)
+// Mode LISTENING: Mata Bangun & Menyimak (Simetris)
 void OledDisplay::ListeningBehavior(int base_eye_height) {
     lv_obj_set_size(left_eye_, EYE_WIDTH, base_eye_height);
     lv_obj_set_size(right_eye_, EYE_WIDTH, base_eye_height);
@@ -270,7 +268,7 @@ void OledDisplay::SpeakingBehavior(int eye_height) {
     int eye_h = speak_mouth_target_;
     if (eye_height < 8) eye_h = eye_height; // Jika sedang berkedip
 
-    // Efek Squash & Stretch: Jika mata mengecil secara vertikal, lebar membesar secara horizontal
+    // Efek Squash & Stretch
     int eye_w = EYE_WIDTH + (EYE_HEIGHT - eye_h) / 2;
 
     lv_obj_set_size(left_eye_, eye_w, eye_h);
