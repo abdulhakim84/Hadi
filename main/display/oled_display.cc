@@ -247,17 +247,14 @@ void OledDisplay::IdleBehavior(int base_eye_height) {
 
 // Mode LISTENING: Mata Bangun/Menyimak Penasaran (Mata sedikit asimetris)
 void OledDisplay::ListeningBehavior(int base_eye_height) {
-    int left_h = base_eye_height - 3;
-    int right_h = base_eye_height + 2;
+    lv_obj_set_size(left_eye_, EYE_WIDTH, base_eye_height);
+    lv_obj_set_size(right_eye_, EYE_WIDTH, base_eye_height);
 
-    lv_obj_set_size(left_eye_, EYE_WIDTH - 2, left_h);
-    lv_obj_set_size(right_eye_, EYE_WIDTH + 2, right_h);
-
-    lv_obj_set_style_radius(left_eye_, EYE_RADIUS - 1, 0);
+    lv_obj_set_style_radius(left_eye_, EYE_RADIUS, 0);
     lv_obj_set_style_radius(right_eye_, EYE_RADIUS, 0);
 
-    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X, -2);
-    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, 2);
+    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X, 0);
+    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, 0);
 }
 
 // Mode SPEAKING: Animasi Mata Memantul/Bicara (Squash & Stretch)
