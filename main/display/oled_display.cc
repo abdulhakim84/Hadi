@@ -15,7 +15,7 @@
 #define EYE_WIDTH       28   // Lebar mata terbuka (px)
 #define EYE_HEIGHT      16   // Tinggi mata terbuka (px)
 #define EYE_RADIUS       7   // Kelengkungan sudut mata (px)
-#define EYE_OFFSET_X    22   // Jarak tiap mata dari titik tengah layar (px)
+#define EYE_OFFSET_X    24   // Jarak tiap mata dari titik tengah layar (px)
 // =================================================================
 
 OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel,
@@ -24,7 +24,7 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
     width_ = width;
     height_ = height;
 
-    // Invert warna hardware agar background hitam murni & piksel mata biru menyala
+    // Invert warna hardware agar background hitam murni & piksel mata menyala
     esp_lcd_panel_invert_color(panel_, true);
 
     ESP_LOGI(TAG, "Initialize LVGL");
@@ -58,7 +58,7 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
                 .buff_dma = 1,
                 .buff_spiram = 0,
                 .sw_rotate = 0,
-                .full_refresh = 1, // Kunci kestabilan transmisi I2C/SPI OLED
+                .full_refresh = 1,
                 .direct_mode = 0,
             },
     };
@@ -120,7 +120,7 @@ void OledDisplay::SetupUI() {
     lv_obj_remove_flag(left_eye_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_remove_flag(right_eye_, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Set warna mata ke Putih di LVGL (menjadi Biru Menyala di OLED)
+    // Set warna mata ke Putih di LVGL (menjadi Biru/Menyala di OLED)
     lv_obj_set_style_bg_color(left_eye_, lv_color_white(), 0);
     lv_obj_set_style_bg_color(right_eye_, lv_color_white(), 0);
 
@@ -159,7 +159,9 @@ void OledDisplay::SetState(FaceState state) {
     state_ = state; 
 }
 
-// Tangkap status sistem dari application.cc
+// -----------------------------------------------------------------
+// PENENTU KONDISI KELUAR/MASUK: IDLE, LISTENING, SPEAKING
+// -----------------------------------------------------------------
 void OledDisplay::SetStatus(const char* status) {
     if (status == nullptr) return;
 
@@ -169,17 +171,17 @@ void OledDisplay::SetStatus(const char* status) {
 
     ESP_LOGI(TAG, "SetStatus dipanggil: %s", status);
 
-    // Deteksi kata kunci Listening
+    // 1. KONDISI LISTENING (Bangun / Menyimak)
     if (st.find("listen") != std::string::npos || st.find("dengar") != std::string::npos || 
         st.find("think") != std::string::npos || st.find("pikir") != std::string::npos) {
         state_ = FaceState::Listening;
     } 
-    // Deteksi kata kunci Speaking
+    // 2. KONDISI SPEAKING (Berbicara / Merespons)
     else if (st.find("speak") != std::string::npos || st.find("bicara") != std::string::npos || 
              st.find("jawab") != std::string::npos || st.find("say") != std::string::npos) {
         state_ = FaceState::Speaking;
     } 
-    // Deteksi status Standby / Idle
+    // 3. KONDISI IDLE (Standby / Tidur)
     else if (st.find("standby") != std::string::npos || st.find("ready") != std::string::npos || 
              st.find("sleep") != std::string::npos || st.find("siap") != std::string::npos ||
              st.find("tunggu") != std::string::npos || st.find("idle") != std::string::npos) {
@@ -197,16 +199,18 @@ void OledDisplay::SetEmotion(const char* emotion) {
 
     ESP_LOGI(TAG, "SetEmotion dipanggil: %s", emotion);
 
-    if (em.find("listen") != std::string::npos || em.find("think") != std::string::npos) {
+    // Hanya ubah ke Idle jika server secara khusus meminta "sleep" atau "idle"
+    if (em.find("sleep") != std::string::npos || em.find("idle") != std::string::npos) {
+        state_ = FaceState::Idle;
+    } 
+    else if (em.find("listen") != std::string::npos || em.find("think") != std::string::npos) {
         state_ = FaceState::Listening;
     } 
     else if (em.find("speak") != std::string::npos || em.find("talk") != std::string::npos) {
         state_ = FaceState::Speaking;
-    } 
-    else {
-        // "neutral", "sleep", "idle", dll. Semua dikembalikan ke mode Idle (mata terpejam/tidur)
-        state_ = FaceState::Idle;
     }
+    // PERBAIKAN PENTING: Emosi "neutral", "happy", dll TIDAK BOLEH mereset state_ ke Idle!
+    // Biarkan status tetap berada di Listening, Speaking, atau Idle sesuai kondisi terakhir dari SetStatus.
 }
 
 // Tangkap percakapan masuk dari application.cc
@@ -217,10 +221,10 @@ void OledDisplay::SetChatMessage(const char* role, const char* content) {
     std::string r(role);
 
     if (r == "user") {
-        state_ = FaceState::Listening;
+        state_ = FaceState::Listening;  // User bicara -> Mata Bangun & Menyimak
     } 
     else if (r == "assistant") {
-        state_ = FaceState::Speaking;
+        state_ = FaceState::Speaking;   // Assistant menjawab -> Mata Berbicara
     }
 }
 
@@ -228,7 +232,7 @@ void OledDisplay::SetChatMessage(const char* role, const char* content) {
 void OledDisplay::IdleBehavior(int base_eye_height) {
     uint32_t now = lv_tick_get();
 
-    // Efek bernapas: Tinggi mata berdenyut halus (3px - 4px) setiap ~1.5 detik
+    // Efek bernapas saat tidur
     int breath_cycle = (now / 750) % 2; 
     int sleep_eye_h = 3 + breath_cycle;
     int sleep_eye_w = EYE_WIDTH - 2;
@@ -243,7 +247,7 @@ void OledDisplay::IdleBehavior(int base_eye_height) {
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, 2);
 }
 
-// Mode LISTENING: Mata Bangun & Menyimak (Simetris)
+// Mode LISTENING: Mata Bangun & Terbuka Lebar (Simetris)
 void OledDisplay::ListeningBehavior(int base_eye_height) {
     lv_obj_set_size(left_eye_, EYE_WIDTH, base_eye_height);
     lv_obj_set_size(right_eye_, EYE_WIDTH, base_eye_height);
@@ -261,14 +265,12 @@ void OledDisplay::SpeakingBehavior(int eye_height) {
 
     if (now - speak_last_update_ > 100) {
         speak_last_update_ = now;
-        // Variasi tinggi mata saat AI berbicara
         speak_mouth_target_ = (EYE_HEIGHT - 6) + (rand() % 10);
     }
 
     int eye_h = speak_mouth_target_;
-    if (eye_height < 8) eye_h = eye_height; // Jika sedang berkedip
+    if (eye_height < 8) eye_h = eye_height; // Jika sedang kedip
 
-    // Efek Squash & Stretch
     int eye_w = EYE_WIDTH + (EYE_HEIGHT - eye_h) / 2;
 
     lv_obj_set_size(left_eye_, eye_w, eye_h);
@@ -297,14 +299,14 @@ void OledDisplay::Update() {
 
     int eye_height = EYE_HEIGHT;
 
-    // Tahapan animasi berkedip
+    // Tahapan kedip
     switch (blink_phase_) {
         case 1:
             eye_height = EYE_HEIGHT / 2;
             blink_phase_ = 2;
             break;
         case 2:
-            eye_height = 2; // Mata tertutup rapat saat kedip
+            eye_height = 2;
             blink_phase_ = 3;
             break;
         case 3:
@@ -315,7 +317,7 @@ void OledDisplay::Update() {
             break;
     }
 
-    // Jalankan animasi sesuai status aktif
+    // Eksekusi animasi sesuai status
     switch (state_) {
         case FaceState::Idle:
             IdleBehavior(eye_height);
