@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <string>
+#include <algorithm>
 #include <esp_err.h>
 #include <esp_log.h>
 #include <esp_lvgl_port.h>
@@ -12,9 +13,9 @@
 // PENGATURAN UTAMA UKURAN & POSISI MATA ROBOT (EMO STYLE)
 // =================================================================
 #define EYE_WIDTH       28   // Lebar mata terbuka (px)
-#define EYE_HEIGHT      16   // Tinggi mata terbuka (px)
+#define EYE_HEIGHT      20   // Tinggi mata terbuka (px)
 #define EYE_RADIUS       7   // Kelengkungan sudut mata (px)
-#define EYE_OFFSET_X    20   // Jarak tiap mata dari titik tengah layar (px)
+#define EYE_OFFSET_X    18   // Jarak tiap mata dari titik tengah layar (px)
 // =================================================================
 
 OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel,
@@ -23,7 +24,7 @@ OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handl
     width_ = width;
     height_ = height;
 
-    // Invert warna agar background hitam murni & piksel mata biru menyala
+    // Invert warna hardware agar background hitam murni & piksel mata biru menyala
     esp_lcd_panel_invert_color(panel_, true);
 
     ESP_LOGI(TAG, "Initialize LVGL");
@@ -112,7 +113,7 @@ void OledDisplay::SetupUI() {
     lv_obj_remove_flag(container_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_center(container_);
 
-    // Membuat Objek Mata Kiri dan Mata Kanan (Tanpa Mulut)
+    // Membuat Objek Mata Kiri dan Mata Kanan
     left_eye_ = lv_obj_create(container_);
     right_eye_ = lv_obj_create(container_);
 
@@ -135,13 +136,15 @@ void OledDisplay::SetupUI() {
     lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X, 0);
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, 0);
 
-    // Timer pembaharuan animasi (80 ms / 12.5 FPS)
+    // Timer pembaharuan animasi (80 ms / ~12.5 FPS)
     timer_ = lv_timer_create(
         [](lv_timer_t* t) {
             auto disp = static_cast<OledDisplay*>(lv_timer_get_user_data(t));
             disp->Update();
         },
         80, this);
+
+    setup_ui_called_ = true;
 }
 
 bool OledDisplay::Lock(int timeout_ms) { return lvgl_port_lock(timeout_ms); }
@@ -150,26 +153,78 @@ void OledDisplay::Unlock() { lvgl_port_unlock(); }
 
 void OledDisplay::SetTheme(Theme* theme) {}
 
+// Manual Set State
 void OledDisplay::SetState(FaceState state) { 
     DisplayLockGuard lock(this);
     state_ = state; 
 }
 
+// Tangkap status sistem dari application.cc (WiFi, Connecting, Listening, Speaking, Standby, dll)
+void OledDisplay::SetStatus(const char* status) {
+    if (status == nullptr) return;
+
+    DisplayLockGuard lock(this);
+    std::string st(status);
+    std::transform(st.begin(), st.end(), st.begin(), ::tolower);
+
+    ESP_LOGI(TAG, "SetStatus dipanggil dari application.cc: %s", status);
+
+    // Deteksi kata kunci Listening (Inggris & Indonesia)
+    if (st.find("listen") != std::string::npos || st.find("dengar") != std::string::npos || 
+        st.find("think") != std::string::npos || st.find("pikir") != std::string::npos) {
+        state_ = FaceState::Listening;
+    } 
+    // Deteksi kata kunci Speaking (Inggris & Indonesia)
+    else if (st.find("speak") != std::string::npos || st.find("bicara") != std::string::npos || 
+             st.find("jawab") != std::string::npos || st.find("say") != std::string::npos) {
+        state_ = FaceState::Speaking;
+    } 
+    // Deteksi kata kunci Standby / Sleep
+    else if (st.find("standby") != std::string::npos || st.find("ready") != std::string::npos || 
+             st.find("sleep") != std::string::npos || st.find("siap") != std::string::npos) {
+        state_ = FaceState::Idle;
+    }
+}
+
+// Tangkap emosi dari server/application.cc
 void OledDisplay::SetEmotion(const char* emotion) {
     if (emotion == nullptr) return;
 
     DisplayLockGuard lock(this);
     std::string em(emotion);
-    if (em == "listening" || em == "think") {
+    std::transform(em.begin(), em.end(), em.begin(), ::tolower);
+
+    ESP_LOGI(TAG, "SetEmotion dipanggil dari application.cc: %s", emotion);
+
+    if (em.find("listen") != std::string::npos || em.find("think") != std::string::npos) {
         state_ = FaceState::Listening;
-    } else if (em == "speaking" || em == "talk") {
+    } 
+    else if (em.find("speak") != std::string::npos || em.find("talk") != std::string::npos) {
         state_ = FaceState::Speaking;
-    } else {
+    } 
+    else if (em.find("sleep") != std::string::npos || em.find("idle") != std::string::npos) {
         state_ = FaceState::Idle;
     }
+    // PENTING: Jika emotion berupa "neutral", "happy", "sad", dll., 
+    // JANGAN UBAH state_! Biarkan state_ tetap berada di state terakhir yang diset oleh SetStatus/SetChatMessage.
 }
 
-void OledDisplay::SetChatMessage(const char* role, const char* content) {}
+// Tangkap percakapan masuk dari application.cc
+void OledDisplay::SetChatMessage(const char* role, const char* content) {
+    if (role == nullptr) return;
+
+    DisplayLockGuard lock(this);
+    std::string r(role);
+
+    // Jika pesan dari user -> Ubah ke Mode Listening
+    if (r == "user") {
+        state_ = FaceState::Listening;
+    } 
+    // Jika pesan dari assistant -> Ubah ke Mode Speaking
+    else if (r == "assistant") {
+        state_ = FaceState::Speaking;
+    }
+}
 
 // Mode IDLE: Mode Tidur Terpejam (- -) dengan Efek Bernapas Halus
 void OledDisplay::IdleBehavior(int base_eye_height) {
@@ -205,7 +260,7 @@ void OledDisplay::ListeningBehavior(int base_eye_height) {
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, 2);
 }
 
-// Mode SPEAKING: Animasi Mata Memantul/Bicara (Squash & Stretch pengganti mulut)
+// Mode SPEAKING: Animasi Mata Memantul/Bicara (Squash & Stretch)
 void OledDisplay::SpeakingBehavior(int eye_height) {
     uint32_t now = lv_tick_get();
 
@@ -265,7 +320,7 @@ void OledDisplay::Update() {
             break;
     }
 
-    // Jalankan animasi sesuai status sistem
+    // Jalankan animasi sesuai status aktif
     switch (state_) {
         case FaceState::Idle:
             IdleBehavior(eye_height);
