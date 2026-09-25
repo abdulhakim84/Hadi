@@ -149,19 +149,7 @@ void OledDisplay::SetState(FaceState state) {
     state_ = state; 
 }
 
-void OledDisplay::SetEmotion(const char* emotion) {
-    if (emotion == nullptr) return;
-
-    DisplayLockGuard lock(this);
-    std::string em(emotion);
-    if (em == "listening" || em == "think") {
-        state_ = FaceState::Listening;
-    } else if (em == "speaking" || em == "talk") {
-        state_ = FaceState::Speaking;
-    } else {
-        state_ = FaceState::Idle;
-    }
-}
+void OledDisplay::SetEmotion(const char* emotion) {}
 
 void OledDisplay::SetChatMessage(const char* role, const char* content) {}
 
