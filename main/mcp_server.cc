@@ -132,6 +132,23 @@ void McpServer::AddCommonTools() {
     }
 #endif
 
+        AddTool("self.play_music",
+        "Memutar musik/audio dari URL MP3. Jika pengguna meminta memutar lagu 'Aku Dan Dirimu' atau lagu lain, gunakan tool ini.",
+        PropertyList({
+            Property("url", kPropertyTypeString, "URL audio MP3 yang akan diputar")
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            std::string url = properties["url"].value<std::string>();
+            // Gunakan URL default lagu 'Aku Dan Dirimu' jika URL kosong
+            if (url.empty()) {
+                url = "http://dn711109.ca.archive.org/0/items/TerpurukKuDisini/Aku%20Dan%20Dirimu.mp3";
+            }
+
+            auto& app = Application::GetInstance();
+            app.PlaySound(url);
+            return "Memutar musik dari: " + url;
+        });
+
  AddTool("self.steer_car",
         "Control steering direction of the RC car with smooth PWM.",
         PropertyList({
