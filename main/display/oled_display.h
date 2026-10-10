@@ -33,7 +33,6 @@ private:
     int blink_phase_ = 0;
     uint32_t speak_last_update_ = 0;
     int speak_mouth_target_ = 0;
-    int speak_mouth_current_ = 0;
 
     // Fungsi Internal Animasi Wajah
     void IdleBehavior(int base_eye_height);
