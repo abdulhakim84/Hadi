@@ -131,7 +131,7 @@ void OledDisplay::SetupUI() {
 
     lv_obj_set_size(left_eye_, EYE_WIDTH, EYE_HEIGHT);
     lv_obj_set_size(right_eye_, EYE_WIDTH, EYE_HEIGHT);
-    lv_obj_set_size(mouth_, 10, 4);
+    lv_obj_set_size(mouth_, 12, 3);
 
     lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X, -2);
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, -2);
@@ -177,6 +177,9 @@ void OledDisplay::IdleBehavior(int base_eye_height) {
 
     lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X + idle_move_offset_x_, idle_move_offset_y_ - 2);
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X + idle_move_offset_x_, idle_move_offset_y_ - 2);
+    
+    // Mulut diam bentuk senyum tipis saat idle
+    lv_obj_set_size(mouth_, 10, 3);
     lv_obj_align(mouth_, LV_ALIGN_CENTER, idle_move_offset_x_, 12 + idle_move_offset_y_);
 }
 
@@ -192,29 +195,37 @@ void OledDisplay::ListeningBehavior(int base_eye_height) {
 
     lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X, -2);
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, 2);
+    
+    // Mulut garis lurus kecil saat mendengarkan
+    lv_obj_set_size(mouth_, 8, 2);
     lv_obj_align(mouth_, LV_ALIGN_CENTER, 0, 12);
 }
 
 void OledDisplay::SpeakingBehavior(int eye_height) {
     uint32_t now = lv_tick_get();
 
+    // Mengatur kecepatan buka-tutup mulut saat berbicara (tiap 100ms)
     if (now - speak_last_update_ > 100) {
         speak_last_update_ = now;
-        speak_mouth_target_ = (EYE_HEIGHT - 6) + (rand() % 10);
+        // Tinggi mulut bervariasi antara 2 piksel (menutup) hingga 10 piksel (membuka lebar)
+        speak_mouth_target_ = 2 + (rand() % 9); 
     }
 
-    int eye_h = speak_mouth_target_;
-    if (eye_height < 8) eye_h = eye_height;
-
-    int eye_w = EYE_WIDTH + (EYE_HEIGHT - eye_h) / 2;
+    // Mata tetap stabil mengikuti ukuran normal / fungsi kedip (eye_height)
+    int eye_w = EYE_WIDTH;
+    int eye_h = eye_height;
 
     lv_obj_set_size(left_eye_, eye_w, eye_h);
     lv_obj_set_size(right_eye_, eye_w, eye_h);
-    lv_obj_set_size(mouth_, 10 + (rand() % 4), 4);
 
     lv_obj_set_style_radius(left_eye_, (eye_h < 8) ? 2 : EYE_RADIUS, 0);
     lv_obj_set_style_radius(right_eye_, (eye_h < 8) ? 2 : EYE_RADIUS, 0);
 
+    // Mulut aktif bergerak naik-turun tingginya menyerupai robot sedang berbicara
+    lv_obj_set_size(mouth_, 12 + (rand() % 3), speak_mouth_target_);
+    lv_obj_set_style_radius(mouth_, speak_mouth_target_ > 5 ? 4 : 2, 0);
+
+    // Posisi mata dan mulut
     lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X, -2);
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, -2);
     lv_obj_align(mouth_, LV_ALIGN_CENTER, 0, 12);
