@@ -8,12 +8,12 @@
 #define TAG "OledDisplay"
 
 // =================================================================
-// PENGATURAN UKURAN DAN POSISI MATA (Bisa diubah sesuka hati di sini)
+// PENGATURAN UKURAN DAN POSISI MATA & MULUT
 // =================================================================
-#define EYE_WIDTH       28   // Lebar mata (kurangi nilai ini jika terlalu lebar)
-#define EYE_HEIGHT      16   // Tinggi mata (kurangi nilai ini jika terlalu tinggi/panjang)
-#define EYE_RADIUS       7   // Kehalusan sudut mata (0 = kotak sempurna, semakin besar semakin membulat)
-#define EYE_OFFSET_X    24  // Jarak mata dari titik tengah layar
+#define EYE_WIDTH       28   // Lebar mata
+#define EYE_HEIGHT      16   // Tinggi mata
+#define EYE_RADIUS       7   // Kehalusan sudut mata (kotak membulat)
+#define EYE_OFFSET_X    24   // Jarak mata dari titik tengah layar
 // =================================================================
 
 OledDisplay::OledDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel,
@@ -111,24 +111,31 @@ void OledDisplay::SetupUI() {
 
     left_eye_ = lv_obj_create(container_);
     right_eye_ = lv_obj_create(container_);
+    mouth_ = lv_obj_create(container_);
 
     lv_obj_remove_flag(left_eye_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_remove_flag(right_eye_, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(mouth_, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_set_style_bg_color(left_eye_, lv_color_white(), 0);
     lv_obj_set_style_bg_color(right_eye_, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(mouth_, lv_color_white(), 0);
 
     lv_obj_set_style_border_width(left_eye_, 0, 0);
     lv_obj_set_style_border_width(right_eye_, 0, 0);
+    lv_obj_set_style_border_width(mouth_, 0, 0);
 
     lv_obj_set_style_radius(left_eye_, EYE_RADIUS, 0);
     lv_obj_set_style_radius(right_eye_, EYE_RADIUS, 0);
+    lv_obj_set_style_radius(mouth_, 2, 0);
 
     lv_obj_set_size(left_eye_, EYE_WIDTH, EYE_HEIGHT);
     lv_obj_set_size(right_eye_, EYE_WIDTH, EYE_HEIGHT);
+    lv_obj_set_size(mouth_, 10, 4);
 
-    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X, 0);
-    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, 0);
+    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X, -2);
+    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, -2);
+    lv_obj_align(mouth_, LV_ALIGN_CENTER, 0, 12);
 
     timer_ = lv_timer_create(
         [](lv_timer_t* t) {
@@ -168,8 +175,9 @@ void OledDisplay::IdleBehavior(int base_eye_height) {
     lv_obj_set_style_radius(left_eye_, (eye_h < 8) ? 2 : EYE_RADIUS, 0);
     lv_obj_set_style_radius(right_eye_, (eye_h < 8) ? 2 : EYE_RADIUS, 0);
 
-    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X + idle_move_offset_x_, idle_move_offset_y_);
-    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X + idle_move_offset_x_, idle_move_offset_y_);
+    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X + idle_move_offset_x_, idle_move_offset_y_ - 2);
+    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X + idle_move_offset_x_, idle_move_offset_y_ - 2);
+    lv_obj_align(mouth_, LV_ALIGN_CENTER, idle_move_offset_x_, 12 + idle_move_offset_y_);
 }
 
 void OledDisplay::ListeningBehavior(int base_eye_height) {
@@ -184,6 +192,7 @@ void OledDisplay::ListeningBehavior(int base_eye_height) {
 
     lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X, -2);
     lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, 2);
+    lv_obj_align(mouth_, LV_ALIGN_CENTER, 0, 12);
 }
 
 void OledDisplay::SpeakingBehavior(int eye_height) {
@@ -191,7 +200,6 @@ void OledDisplay::SpeakingBehavior(int eye_height) {
 
     if (now - speak_last_update_ > 100) {
         speak_last_update_ = now;
-        // Variasi tinggi mata saat bicara
         speak_mouth_target_ = (EYE_HEIGHT - 6) + (rand() % 10);
     }
 
@@ -202,12 +210,14 @@ void OledDisplay::SpeakingBehavior(int eye_height) {
 
     lv_obj_set_size(left_eye_, eye_w, eye_h);
     lv_obj_set_size(right_eye_, eye_w, eye_h);
+    lv_obj_set_size(mouth_, 10 + (rand() % 4), 4);
 
     lv_obj_set_style_radius(left_eye_, (eye_h < 8) ? 2 : EYE_RADIUS, 0);
     lv_obj_set_style_radius(right_eye_, (eye_h < 8) ? 2 : EYE_RADIUS, 0);
 
-    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X, 0);
-    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, 0);
+    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X, -2);
+    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, -2);
+    lv_obj_align(mouth_, LV_ALIGN_CENTER, 0, 12);
 }
 
 void OledDisplay::Update() {
