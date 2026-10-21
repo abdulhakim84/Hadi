@@ -166,40 +166,47 @@ void OledDisplay::IdleBehavior(int base_eye_height) {
         idle_move_offset_y_ = (rand() % 5) - 2;
     }
 
-    int eye_h = base_eye_height;
-    int eye_w = (eye_h < 8) ? (EYE_WIDTH + 2) : EYE_WIDTH;
+    // Mata mengantuk/terpejam: buat tinggi sangat tipis (misal: 2px atau 3px)
+    int eye_h = 3; 
+    int eye_w = EYE_WIDTH + 2; // Buat sedikit lebih lebar saat merem/mengantuk
 
     lv_obj_set_size(left_eye_, eye_w, eye_h);
     lv_obj_set_size(right_eye_, eye_w, eye_h);
 
-    lv_obj_set_style_radius(left_eye_, (eye_h < 8) ? 2 : EYE_RADIUS, 0);
-    lv_obj_set_style_radius(right_eye_, (eye_h < 8) ? 2 : EYE_RADIUS, 0);
+    // Radius dibuat kecil (atau 1-2) agar terlihat seperti garis kelopak mata
+    lv_obj_set_style_radius(left_eye_, 1, 0);
+    lv_obj_set_style_radius(right_eye_, 1, 0);
 
-    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X + idle_move_offset_x_, idle_move_offset_y_ - 2);
-    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X + idle_move_offset_x_, idle_move_offset_y_ - 2);
+    // Posisi Y ditambahkan offset (misal: +2 atau +3) agar mata terlihat seperti turun/sayu
+    int sleepy_y_offset = 2;
+
+    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X + idle_move_offset_x_, idle_move_offset_y_ + sleepy_y_offset);
+    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X + idle_move_offset_x_, idle_move_offset_y_ + sleepy_y_offset);
     
-    // Mulut diam bentuk senyum tipis saat idle
-    lv_obj_set_size(mouth_, 10, 3);
+    // Mulut diam (bisa senyum tipis atau garis kecil lurus)
+    lv_obj_set_size(mouth_, 8, 2);
     lv_obj_align(mouth_, LV_ALIGN_CENTER, idle_move_offset_x_, 12 + idle_move_offset_y_);
 }
 
+
 void OledDisplay::ListeningBehavior(int base_eye_height) {
-    int left_h = base_eye_height - 3;
-    int right_h = base_eye_height + 2;
+    // Ukuran kedua mata disamakan menggunakan base_eye_height dan EYE_WIDTH normal
+    lv_obj_set_size(left_eye_, EYE_WIDTH, base_eye_height);
+    lv_obj_set_size(right_eye_, EYE_WIDTH, base_eye_height);
 
-    lv_obj_set_size(left_eye_, EYE_WIDTH - 2, left_h);
-    lv_obj_set_size(right_eye_, EYE_WIDTH + 2, right_h);
-
-    lv_obj_set_style_radius(left_eye_, EYE_RADIUS - 1, 0);
+    // Radius sudut mata dibuat sama rata
+    lv_obj_set_style_radius(left_eye_, EYE_RADIUS, 0);
     lv_obj_set_style_radius(right_eye_, EYE_RADIUS, 0);
 
-    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X, -2);
-    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, 2);
+    // Posisi vertikal disejajarkan (offset Y = 0) agar tidak terlihat miring
+    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X, 0);
+    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, 0);
     
-    // Mulut garis lurus kecil saat mendengarkan
+    // Mulut garis lurus kecil saat mendengarkan (tetap dipertahankan)
     lv_obj_set_size(mouth_, 8, 2);
     lv_obj_align(mouth_, LV_ALIGN_CENTER, 0, 12);
 }
+
 
 void OledDisplay::SpeakingBehavior(int eye_height) {
     uint32_t now = lv_tick_get();
