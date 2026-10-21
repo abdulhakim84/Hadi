@@ -4,6 +4,7 @@
 #include "audio_codec.h"
 #include "board.h"
 #include "display.h"
+#include "oled_display.h"
 #include "mcp_server.h"
 #include "mqtt_protocol.h"
 #include "settings.h"
@@ -1115,8 +1116,6 @@ void Application::ContinueWakeWordInvoke(const std::string& wake_word) {
 void Application::HandleStateChangedEvent() {
     DeviceState new_state = state_machine_.GetState();
     clock_ticks_ = 0;
-    // Any state change invalidates a pending deferred listening start;
-    // the Listening case below re-arms it when needed.
     pending_listening_start_ = false;
 
     auto& board = Board::GetInstance();
@@ -1124,30 +1123,36 @@ void Application::HandleStateChangedEvent() {
     auto led = board.GetLed();
     led->OnStateChanged();
 
+    // Cek apakah display menggunakan OledDisplay, lalu update statenya
+    OledDisplay* oled = dynamic_cast<OledDisplay*>(display);
+
     switch (new_state) {
         case kDeviceStateUnknown:
         case kDeviceStateIdle:
             display->SetStatus(Lang::Strings::STANDBY);
-            display->ClearChatMessages();    // Clear messages first
-            display->SetEmotion("neutral");  // Then set emotion (wechat mode checks child count)
+            display->ClearChatMessages();    
+            display->SetEmotion("neutral");  
             audio_service_.EnableVoiceProcessing(false);
             audio_service_.EnableWakeWordDetection(true);
+            
+            if (oled) oled->SetState(FaceState::Idle); // <--- UPDATE STATE OLED KE IDLE
             break;
+
         case kDeviceStateConnecting:
             display->SetStatus(Lang::Strings::CONNECTING);
             display->SetEmotion("neutral");
             display->SetChatMessage("system", "");
+            
+            if (oled) oled->SetState(FaceState::Idle); // <--- KONDISI KONEKSI MASUK IDLE/DIAM
             break;
+
         case kDeviceStateListening:
             display->SetStatus(Lang::Strings::LISTENING);
             display->SetEmotion("neutral");
 
-            // Make sure the audio processor is running
+            if (oled) oled->SetState(FaceState::Listening); // <--- UPDATE STATE OLED KE LISTENING
+
             if (play_popup_on_listening_ || !audio_service_.IsAudioProcessorRunning()) {
-                // For auto mode, wait for the playback queue to drain before enabling
-                // voice processing. This prevents audio truncation when STOP arrives
-                // late due to network jitter. Instead of blocking the main loop here,
-                // defer the start until MAIN_EVENT_PLAYBACK_DRAINED arrives.
                 if (listening_mode_ == kListeningModeAutoStop && !audio_service_.IsPlaybackIdle()) {
                     pending_listening_start_ = true;
                 } else {
@@ -1157,25 +1162,29 @@ void Application::HandleStateChangedEvent() {
                 ConfigureWakeWordForListening();
             }
             break;
+
         case kDeviceStateSpeaking:
             display->SetStatus(Lang::Strings::SPEAKING);
 
+            if (oled) oled->SetState(FaceState::Speaking); // <--- UPDATE STATE OLED KE SPEAKING
+
             if (listening_mode_ != kListeningModeRealtime) {
                 audio_service_.EnableVoiceProcessing(false);
-                // Only AFE wake word can be detected in speaking mode
                 audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord());
             }
             audio_service_.ResetDecoder();
             break;
+
         case kDeviceStateWifiConfiguring:
             audio_service_.EnableVoiceProcessing(false);
             audio_service_.EnableWakeWordDetection(false);
             break;
         default:
-            // Do nothing
             break;
     }
 }
+
+                    
 
 void Application::StartListeningAudio() {
     // Runs in the main loop, either directly from HandleStateChangedEvent or
