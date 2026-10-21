@@ -34,6 +34,11 @@ private:
     uint32_t speak_last_update_ = 0;
     int speak_mouth_target_ = 0;
 
+    // Variabel tambahan untuk pergerakan mata saat berbicara (Speaking)
+    int speak_move_offset_x_ = 0;
+    int speak_move_offset_y_ = 0;
+    uint32_t speak_eye_last_update_ = 0;
+
     // Fungsi Internal Animasi Wajah
     void IdleBehavior(int base_eye_height);
     void ListeningBehavior(int base_eye_height);
