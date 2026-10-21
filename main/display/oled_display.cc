@@ -211,9 +211,21 @@ void OledDisplay::SpeakingBehavior(int eye_height) {
         speak_mouth_target_ = 2 + (rand() % 9); 
     }
 
-    // Mata tetap stabil mengikuti ukuran normal / fungsi kedip (eye_height)
+    // Mengatur pergerakan dinamis pada mata agar terlihat hidup saat berbicara (tiap 180ms)
+    if (now - speak_eye_last_update_ > 180) {
+        speak_eye_last_update_ = now;
+        // Pergeseran kecil pada posisi mata (-2 sampai +2 piksel secara horizontal & vertikal)
+        speak_move_offset_x_ = (rand() % 5) - 2;
+        speak_move_offset_y_ = (rand() % 3) - 1; 
+    }
+
     int eye_w = EYE_WIDTH;
     int eye_h = eye_height;
+
+    // Sesekali lebar mata sedikit berkedut/bervariasi saat berbicara
+    if (rand() % 25 == 0) {
+        eye_w += (rand() % 5) - 2;
+    }
 
     lv_obj_set_size(left_eye_, eye_w, eye_h);
     lv_obj_set_size(right_eye_, eye_w, eye_h);
@@ -225,11 +237,12 @@ void OledDisplay::SpeakingBehavior(int eye_height) {
     lv_obj_set_size(mouth_, 12 + (rand() % 3), speak_mouth_target_);
     lv_obj_set_style_radius(mouth_, speak_mouth_target_ > 5 ? 4 : 2, 0);
 
-    // Posisi mata dan mulut
-    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X, -2);
-    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X, -2);
-    lv_obj_align(mouth_, LV_ALIGN_CENTER, 0, 12);
+    // Posisi mata dan mulut dengan tambahan offset pergerakan agar tampak hidup
+    lv_obj_align(left_eye_, LV_ALIGN_CENTER, -EYE_OFFSET_X + speak_move_offset_x_, -2 + speak_move_offset_y_);
+    lv_obj_align(right_eye_, LV_ALIGN_CENTER, EYE_OFFSET_X + speak_move_offset_x_, -2 + speak_move_offset_y_);
+    lv_obj_align(mouth_, LV_ALIGN_CENTER, speak_move_offset_x_, 12);
 }
+
 
 void OledDisplay::Update() {
     if (!container_) return;
