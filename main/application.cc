@@ -49,6 +49,20 @@
 static TaskHandle_t steer_task_handle = NULL;
 static TaskHandle_t drive_task_handle = NULL;
 
+static std::string url_encode(const std::string& str) {
+    std::string result;
+    for (char c : str) {
+        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            result += c;
+        } else {
+            char hex[4];
+            snprintf(hex, sizeof(hex), "%%%02X", (unsigned char)c);
+            result += hex;
+        }
+    }
+    return result;
+}
+
 struct SteerParams {
     int left_enable;
     int right_enable;
