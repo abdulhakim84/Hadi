@@ -24,6 +24,7 @@
 #include "audio_engine.h"
 #include "protocol.h"
 #include "ogg_demuxer.h"
+#include "m4a_decoder.h" // Header untuk decoder M4A/Musik
 
 /*
  * There are two types of audio data flow:
@@ -31,9 +32,6 @@
  * 2. (Server) -> {Decode Queue} -> [Opus Decoder] -> {Playback Queue} -> (Speaker)
  *
  * We use dedicated tasks for input, output, and Opus encoding/decoding.
- * 
- * Decode Queue and Send Queue are the main queues, because Opus packets are quite smaller than PCM packets.
- * 
  */
 
 #define OPUS_FRAME_DURATION_MS 60
@@ -80,10 +78,8 @@ struct AudioServiceCallbacks {
     std::function<void(const std::string&)> on_wake_word_detected;
     std::function<void(bool)> on_vad_change;
     std::function<void(void)> on_audio_testing_queue_full;
-    // Fired when the decode/playback queues and their in-flight work are drained.
     std::function<void(void)> on_playback_drained;
 };
-
 
 enum AudioTaskType {
     kAudioTaskTypeEncodeToSendQueue,
@@ -137,6 +133,12 @@ public:
     void ResetDecoder();
     void SetModelsList(srmodel_list_t* models_list);
 
+    // Metode Kontrol Musik
+    void PlayMusicFromUrl(const std::string& url);
+    void StopMusic();
+    bool IsMusicPlaying() const { return music_playing_.load(); }
+    void SetMusicMode(bool enabled);
+
 private:
     AudioCodec* codec_ = nullptr;
     AudioServiceCallbacks callbacks_;
@@ -163,7 +165,7 @@ private:
 
     EventGroupHandle_t event_group_;
 
-    // Audio encode / decode
+    // Audio encode / decode / playback queues
     TaskHandle_t audio_input_task_handle_ = nullptr;
     TaskHandle_t audio_output_task_handle_ = nullptr;
     TaskHandle_t opus_codec_task_handle_ = nullptr;
@@ -178,8 +180,15 @@ private:
     bool output_in_flight_ = false;
     bool playback_drained_notified_ = true;
     uint32_t playback_generation_ = 0;
-    // For server AEC
+
+    // Server AEC timestamp queue
     std::deque<uint32_t> timestamp_queue_;
+
+    // Variabel & Task Pemutaran Musik (M4A)
+    std::string current_music_url_;
+    TaskHandle_t music_task_handle_ = nullptr;
+    std::unique_ptr<M4aDecoder> m4a_decoder_;
+    std::atomic<bool> music_playing_{false};
 
     bool audio_engine_initialized_ = false;
     bool voice_detected_ = false;
@@ -198,6 +207,7 @@ private:
     void AudioInputTask();
     void AudioOutputTask();
     void OpusCodecTask();
+    void MusicStreamTask(); // Task streaming musik
     void PushTaskToEncodeQueue(AudioTaskType type, std::vector<int16_t>&& pcm);
     bool InitializeAudioEngine();
     void SetDecodeSampleRate(int sample_rate, int frame_duration);
