@@ -2,7 +2,7 @@
 dependencies:
   # Mengambil komponen pipeline_http_mp3 langsung dari repository GitHub[span_1](start_span)[span_1](end_span)
   pipeline_http_mp3:
-    git: https://github.com/abdulhakim84/xiaozhimusic.git
+    git: https://github.com/wuooo339/xiaozhimusic.git
     path: pipeline_http_mp3
 
   waveshare/esp_lcd_sh8601: 1.0.2
