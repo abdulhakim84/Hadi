@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <cstring>
 #include <esp_pthread.h>
+#include <cctype>
+#include <cJSON.h>
 
 #include "application.h"
 #include "display.h"
@@ -17,6 +19,8 @@
 #include "settings.h"
 #include "lvgl_theme.h"
 #include "lvgl_display.h"
+#include "audio_service.h"
+#include "device_state.h"
 
 extern "C" {
     void setup_steering();
@@ -30,6 +34,44 @@ extern "C" {
 }
 
 #define TAG "MCP"
+
+// URL编码函数（用于音乐搜索API）
+static std::string url_encode(const std::string& str) {
+    std::string result;
+    for (char c : str) {
+        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            result += c;
+        } else {
+            char hex[4];
+            snprintf(hex, sizeof(hex), "%%%02X", (unsigned char)c);
+            result += hex;
+        }
+    }
+    return result;
+}
+
+// 提取歌曲名称的关键词处理函数
+static std::string extract_song_keyword(const std::string& input) {
+    std::string result = input;
+    
+    // 检查是否存在《》
+    if(input.find("《") != std::string::npos && input.find("》") != std::string::npos) {
+        size_t left_bookmark = input.find("《");
+        size_t right_bookmark = input.find("》");
+        if (left_bookmark != std::string::npos && right_bookmark != std::string::npos && right_bookmark > left_bookmark) {
+            result = input.substr(left_bookmark + 1, right_bookmark - left_bookmark - 1);
+        }
+    }
+    // 移除首尾空格
+    while (!result.empty() && result[0] == ' ') {
+        result.erase(0, 1);
+    }
+    while (!result.empty() && result.back() == ' ') {
+        result.pop_back();
+    }   
+    ESP_LOGI(TAG, "Original keyword: '%s' -> Extracted: '%s'", input.c_str(), result.c_str());
+    return result;
+}
 
 McpServer::McpServer() {
 }
@@ -132,7 +174,9 @@ void McpServer::AddCommonTools() {
     }
 #endif
 
-            AddTool("self.play_aku_dan_dirimu",
+    // --- FITUR PEMUTARAN MUSIK ---
+
+    AddTool("self.play_aku_dan_dirimu",
         "Putar lagu 'Aku Dan Dirimu' (Ari Lasso feat. BCL). Gunakan tool ini jika pengguna meminta memutar lagu Aku Dan Dirimu.",
         PropertyList(),
         [](const PropertyList& properties) -> ReturnValue {
@@ -142,8 +186,106 @@ void McpServer::AddCommonTools() {
             return "Sedang memutar lagu Aku Dan Dirimu.";
         });
 
+    AddTool("test_search_music",
+        "Search and play music by keyword. Use this tool when the user asks to play music, search for songs, or find music. This tool will search for music using the provided keyword and automatically start playing the first result.",
+        PropertyList({
+            Property("keyword", kPropertyTypeString, "Music search keyword")
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto keyword = properties["keyword"].value<std::string>();
+            ESP_LOGI(TAG, "Original search keyword: %s", keyword.c_str());
+            
+            std::string extracted_keyword = extract_song_keyword(keyword);
+            ESP_LOGI(TAG, "Searching for music with extracted keyword: %s", extracted_keyword.c_str());
+            
+            std::string encoded_keyword = url_encode(extracted_keyword);
+            std::string search_url = "https://api.vkeys.cn/v2/music/tencent?word=" + encoded_keyword + "&choose=1&quality=2";
+            
+            auto& board = Board::GetInstance();
+            auto network = board.GetNetwork();
+            auto http = network->CreateHttp(0);
+            
+            if (http->Open("GET", search_url)) {
+                std::string response = http->ReadAll();
+                http->Close();
+                
+                cJSON* root = cJSON_Parse(response.c_str());
+                if (root) {
+                    cJSON* code = cJSON_GetObjectItem(root, "code");
+                    if (cJSON_IsNumber(code) && code->valueint == 200) {
+                        cJSON* data = cJSON_GetObjectItem(root, "data");
+                        if (cJSON_IsObject(data)) {
+                            cJSON* song = cJSON_GetObjectItem(data, "song");
+                            cJSON* singer = cJSON_GetObjectItem(data, "singer");
+                            cJSON* url = cJSON_GetObjectItem(data, "url");
+                            
+                            if (cJSON_IsString(url)) {
+                                std::string music_url = url->valuestring;
+                                ESP_LOGI(TAG, "Found music: %s - %s", 
+                                    cJSON_IsString(song) ? song->valuestring : "未知歌曲",
+                                    cJSON_IsString(singer) ? singer->valuestring : "未知歌手");
+                                
+                                auto& audio_service = Application::GetInstance().GetAudioService();
+                                audio_service.PlayMusicFromUrl(music_url);
+                                
+                                Application::GetInstance().SetDeviceState(kDeviceStateListening);
+                                
+                                std::string result = "{\"success\": true, \"song\": \"";
+                                if (cJSON_IsString(song)) {
+                                    result += song->valuestring;
+                                }
+                                result += "\", \"artist\": \"";
+                                if (cJSON_IsString(singer)) {
+                                    result += singer->valuestring;
+                                }
+                                result += "\", \"message\": \"开始播放音乐\"}";
+                                
+                                cJSON_Delete(root);
+                                return result;
+                            }
+                        }
+                    }
+                    cJSON_Delete(root);
+                }
+            }
+            
+            return "{\"success\": false, \"message\": \"搜索音乐失败\"}";
+        });
+    
+    AddTool("control_music",
+        "Control music playback. Use this tool to stop, pause, or control music playback.",
+        PropertyList({
+            Property("action", kPropertyTypeString, "Control action: play, pause, stop, next, previous")
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto action = properties["action"].value<std::string>();
+            auto& audio_service = Application::GetInstance().GetAudioService();
+            
+            if (action == "stop" || action == "pause") {
+                audio_service.StopMusic();
+                return "{\"success\": true, \"message\": \"音乐已停止\"}";
+            } else {
+                return "{\"success\": false, \"message\": \"不支持的操作\"}";
+            }
+        });
+    
+    AddTool("test_music_playback",
+        "Test music playback functionality with a sample audio file.",
+        PropertyList(),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto& audio_service = Application::GetInstance().GetAudioService();
+            std::string test_url = "http://ws.stream.qqmusic.qq.com/C200003Yn1vu1BzjDo.m4a?fromtag=2&guid=api.vkeys.cn&trace=54aa84b86fa4bfca&uin=3232283746&vkey=E83BAB20ACFCC54E68AADCC266EE5D604396A483FCFA8EB99E3930917E475A6C09FF7E9456184433054A54EBB5CDDE7E1421B269FF2A348E__v2b9aaff4";
+            ESP_LOGI(TAG, "Testing music playback with M4A URL");
+            audio_service.PlayMusicFromUrl(test_url);
+            
+            Application::GetInstance().SetDeviceState(kDeviceStateListening);
+            
+            return "{\"success\": true, \"message\": \"开始播放测试音乐\"}";
+        });
 
- AddTool("self.steer_car",
+    // --- KONTROL MOBIL RC ---
+
+    AddTool("self.steer_car",
         "Control steering direction of the RC car with smooth PWM.",
         PropertyList({
             Property("direction", kPropertyTypeString, "Direction: 'kiri' or 'kanan'"),
@@ -173,7 +315,7 @@ void McpServer::AddCommonTools() {
             return "Arah tidak valid";
         });
 
-AddTool("self.drive_car",
+    AddTool("self.drive_car",
         "Control straight driving movement of the RC car.",
         PropertyList({
             Property("action", kPropertyTypeString, "Action: 'maju', 'mundur', or 'berhenti'")
@@ -276,7 +418,6 @@ void McpServer::AddUserOnlyTools() {
 
                 ESP_LOGI(TAG, "Upload snapshot %u bytes to %s", jpeg_data.size(), url.c_str());
                 
-                // 构造multipart/form-data请求体
                 std::string boundary = "----ESP32_SCREEN_SNAPSHOT_BOUNDARY";
                 
                 auto http = Board::GetInstance().GetNetwork()->CreateHttp(3);
@@ -285,7 +426,6 @@ void McpServer::AddUserOnlyTools() {
                     throw std::runtime_error("Failed to open URL: " + url);
                 }
                 {
-                    // 文件字段头部
                     std::string file_header;
                     file_header += "--" + boundary + "\r\n";
                     file_header += "Content-Disposition: form-data; name=\"file\"; filename=\"screenshot.jpg\"\r\n";
@@ -294,11 +434,9 @@ void McpServer::AddUserOnlyTools() {
                     http->Write(file_header.c_str(), file_header.size());
                 }
 
-                // JPEG数据
                 http->Write((const char*)jpeg_data.data(), jpeg_data.size());
 
                 {
-                    // multipart尾部
                     std::string multipart_footer;
                     multipart_footer += "\r\n--" + boundary + "--\r\n";
                     http->Write(multipart_footer.c_str(), multipart_footer.size());
@@ -357,7 +495,6 @@ void McpServer::AddUserOnlyTools() {
     }
 #endif // HAVE_LVGL
 
-    // Assets download url (always registered — Settings storage works regardless of partition layout)
     AddUserOnlyTool("self.assets.set_download_url", "Set the download url for the assets",
             PropertyList({
                 Property("url", kPropertyTypeString)
@@ -371,7 +508,6 @@ void McpServer::AddUserOnlyTools() {
 }
 
 void McpServer::AddTool(McpTool* tool) {
-    // Prevent adding duplicate tools
     if (std::find_if(tools_.begin(), tools_.end(), [tool](const McpTool* t) { return t->name() == tool->name(); }) != tools_.end()) {
         ESP_LOGW(TAG, "Tool %s already added", tool->name().c_str());
         return;
@@ -421,14 +557,12 @@ void McpServer::ParseCapabilities(const cJSON* capabilities) {
 }
 
 void McpServer::ParseMessage(const cJSON* json) {
-    // Check JSONRPC version
     auto version = cJSON_GetObjectItem(json, "jsonrpc");
     if (version == nullptr || !cJSON_IsString(version) || strcmp(version->valuestring, "2.0") != 0) {
         ESP_LOGE(TAG, "Invalid JSONRPC version: %s", version ? version->valuestring : "null");
         return;
     }
     
-    // Check method
     auto method = cJSON_GetObjectItem(json, "method");
     if (method == nullptr || !cJSON_IsString(method)) {
         ESP_LOGE(TAG, "Missing method");
@@ -440,7 +574,6 @@ void McpServer::ParseMessage(const cJSON* json) {
         return;
     }
     
-    // Check params
     auto params = cJSON_GetObjectItem(json, "params");
     if (params != nullptr && !cJSON_IsObject(params)) {
         ESP_LOGE(TAG, "Invalid params for method: %s", method_str.c_str());
@@ -531,7 +664,6 @@ void McpServer::GetToolsList(int id, const std::string& cursor, bool list_user_o
     std::string next_cursor = "";
     
     while (it != tools_.end()) {
-        // 如果我们还没有找到起始位置，继续搜索
         if (!found_cursor) {
             if ((*it)->name() == cursor) {
                 found_cursor = true;
@@ -546,10 +678,8 @@ void McpServer::GetToolsList(int id, const std::string& cursor, bool list_user_o
             continue;
         }
         
-        // 添加tool前检查大小
         std::string tool_json = (*it)->to_json() + ",";
         if (json.length() + tool_json.length() + 30 > max_payload_size) {
-            // 如果添加这个tool会超出大小限制，设置next_cursor并退出循环
             next_cursor = (*it)->name();
             break;
         }
@@ -563,7 +693,6 @@ void McpServer::GetToolsList(int id, const std::string& cursor, bool list_user_o
     }
     
     if (json.back() == '[' && !tools_.empty()) {
-        // 如果没有添加任何tool，返回错误
         ESP_LOGE(TAG, "tools/list: Failed to add tool %s because of payload size limit", next_cursor.c_str());
         ReplyError(id, "Failed to add tool " + next_cursor + " because of payload size limit");
         return;
